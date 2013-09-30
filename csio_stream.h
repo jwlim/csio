@@ -208,7 +208,6 @@ inline bool InputStream::FetchSyncFrames(std::vector<Frame>* frames) {
     return FetchFrameBody(&frames->at(0));
   } else {
     bool ret = true;
-    std::cerr << "here\n";
     for (int i = 0; ret && i < num_frames; ++i) ret = Fetch(&frames->at(i));
     return ret;
   }
