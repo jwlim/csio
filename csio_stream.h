@@ -203,7 +203,6 @@ inline bool InputStream::FetchSyncFrames(std::vector<Frame>* frames) {
   }
   frames->resize(num_frames);
   if (chid != SYNC_MARK) {
-    std::cerr << chid << "sync\n";
     frames->at(0).chid = chid;
     return FetchFrameBody(&frames->at(0));
   } else {

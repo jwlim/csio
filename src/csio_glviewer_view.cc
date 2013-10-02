@@ -31,6 +31,10 @@
 
 using namespace std;
 
+DEFINE_double(fov, 90.0, "GL camera field of view");
+DEFINE_string(cam, "", "GL camera parameters (x,y,z,rx,ry,rz).");
+DEFINE_string(grid, "", "GL grid parameters (size,step,z).");
+
 namespace {
 
 inline void ColormapJet(int val, unsigned char* rgb) {  // val: 0 ~ 256*4-1
@@ -42,42 +46,60 @@ inline void ColormapJet(int val, unsigned char* rgb) {  // val: 0 ~ 256*4-1
   else  r = 255 - val, g = 0, b = 0;
 }
 
-void DrawGrid(const int grid_size = 60, const int grid_step = 5,
-              const float grid_z = -1.f) {
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-  glBegin(GL_LINES);
-  for (int i = -grid_size; i <= grid_size; i += grid_step) {  // 5m - was 10m
-    if (i == 0)  continue;
-    else if (i % 5 == 0) glColor4f(0.4, 0.4, 0.4, 0.3);
-    else  glColor4f(0.2, 0.2, 0.2, 0.1);
-    glVertex3f(-grid_size, grid_z, i);
-    glVertex3f( grid_size, grid_z, i);
-    glVertex3f(         i, grid_z, -grid_size);
-    glVertex3f(         i, grid_z,  grid_size);
+struct GLGrid {
+  int size, step;
+  float z;
+
+  GLGrid() : size(60), step(5), z(-1.f) {
+    if (FLAGS_grid.empty() == false) {
+      sscanf(FLAGS_grid.c_str(), "%d,%d,%f", &size, &step, &z);
+    }
   }
-  glColor4f(0.5, 0.0, 0.0, 0.5);
-  glVertex3f(-grid_size, grid_z, 0);
-  glVertex3f( grid_size, grid_z, 0);
-  glColor4f(0.0, 0.5, 0.0, 0.5);
-  glVertex3f(0, grid_z, -grid_size);
-  glVertex3f(0, grid_z,  grid_size);
-  glEnd();
-  glDisable(GL_BLEND);
-}
+  void DrawGrid() {
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glBegin(GL_LINES);
+    for (int i = -size; i <= size; i += step) {
+      if (i == 0)  continue;
+      else if (i % 5 == 0) glColor4f(0.4, 0.4, 0.4, 0.3);
+      else  glColor4f(0.2, 0.2, 0.2, 0.1);
+      glVertex3f(-size, z, i);
+      glVertex3f( size, z, i);
+      glVertex3f(         i, z, -size);
+      glVertex3f(         i, z,  size);
+    }
+    glColor4f(0.5, 0.0, 0.0, 0.5);
+    glVertex3f(-size, z, 0);
+    glVertex3f( size, z, 0);
+    glColor4f(0.0, 0.5, 0.0, 0.5);
+    glVertex3f(0, z, -size);
+    glVertex3f(0, z,  size);
+    glEnd();
+    glDisable(GL_BLEND);
+  }
+};
 
 struct GLCam {
-  bool ortho;
   double fov, near_clip, far_clip;
   double pose[6];
   double R[9];  // 3x3 matrix (column major).
+  bool ortho;
 
-  GLCam() : ortho(false), fov(90.0), near_clip(0.1), far_clip(1000.0) {
+  GLCam() : fov(FLAGS_fov), near_clip(0.1), far_clip(1000.0), ortho(false) {
     for (int i = 0; i < 6; ++i) pose[i] = 0.0;
-    pose[0] = 1.3;
-    pose[4] = 10.0;  //10.0;
-    pose[5] = 2.0;  //-10.0;
+    if (FLAGS_cam.empty()) {
+      pose[0] = M_PI / 2;
+      pose[4] = 10.0;
+    } else {
+      sscanf(FLAGS_cam.c_str(), "%lf,%lf,%lf,%lf,%lf,%lf",
+             &pose[3], &pose[4], &pose[5], &pose[0], &pose[1], &pose[2]);
+    }
     UpdateR();
+  }
+  void SetTopView(const double z = 10.0) {
+    for (int i = 0; i < 6; ++i) pose[i] = 0.0;
+    pose[0] = M_PI / 2;
+    pose[4] = z;
   }
   void UpdateR() {  // Rodrigues' formula.
     const double* rot = pose;
@@ -118,6 +140,8 @@ struct GLCam {
 
 namespace csio {
 
+//-----------------------------------------------------------------------------
+
 class ViewImage : public View {
  public:
   ViewImage(const string& pixel_type, int w, int h, int maxv)
@@ -142,25 +166,30 @@ class ViewImage : public View {
   GLuint tex_;
 };
 
+//-----------------------------------------------------------------------------
+
 class View3D : public View {
  public:
-  View3D(int w, int h) : View(), frame_ptr_(NULL), show_grid_(true), cam_() {}
+  View3D(int w, int h)
+      : View(), frame_ptr_(NULL), show_grid_(true), decoration_(true), cam_() {}
   virtual ~View3D() {}
 
   virtual void InitializeGL();
   virtual void DrawFrame(const csio::Frame* frame_ptr);
   virtual void Redraw();
-  virtual bool HandleKey(unsigned char key, int x, int y);
+  virtual bool HandleKey(int key, int special, int x, int y);
   virtual bool HandleMouse(int button, int state, int x, int y);
 
  protected:
   std::vector<char> buf_;
   const csio::Frame* frame_ptr_;
   bool show_grid_;
+  bool decoration_;
   GLCam cam_;
+  GLGrid grid_;
 };
 
-// ----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
 
 View* View::Setup(const csio::ChannelInfo& ch_info, int u, int v) {
   map<string, string> cfg;
@@ -276,6 +305,7 @@ void ViewImage::Redraw() {
   glMatrixMode(GL_MODELVIEW);
 }
 
+/*
 void ViewImage::DrawBufferDepthPointCloud() {
   LOG(INFO) << "DrawBufferDepthPointCloud: " << gl.x << "," << gl.y << ", "
       << gl.w << "x" << gl.h;
@@ -292,7 +322,7 @@ void ViewImage::DrawBufferDepthPointCloud() {
   glMatrixMode(GL_MODELVIEW);
   glLoadIdentity();
   DrawGrid();
-/*
+/ *
     HtMat<float,4,4> M;
     setsubmat(M, 0,0, rodrigues(HtVec<float,3>(_dp3D.rot)/180*M_PI));
     M(3,3) = 1;
@@ -304,8 +334,9 @@ void ViewImage::DrawBufferDepthPointCloud() {
             glColor3ub(buf[i].r,buf[i].g,buf[i].b);  glVertex3fv(&ptsbuf[3*i]); );
       glEnd();
     }
-*/
+* /
 }
+*/
 
 // ----------------------------------------------------------------------------
 
@@ -353,7 +384,7 @@ void View3D::Redraw() {
   glMatrixMode(GL_MODELVIEW);
   glLoadIdentity();
 
-  if (show_grid_) DrawGrid();
+  if (show_grid_) grid_.DrawGrid();
 
   GeometricObject gobj;
   int bufidx = 0;
@@ -362,7 +393,6 @@ void View3D::Redraw() {
     switch (gobj.type) {
       case 'p':  type = GL_POINTS;  break;
       case 'l':  type = GL_LINES;  break;
-//      case 's':  type = GL_LINES;  stipple = true;  break;  // Stippled lines.
       case 'L':  type = GL_LINE_STRIP;  break;
       case 'O':  type = GL_LINE_LOOP;  break;
       case 't':  type = GL_TRIANGLES;  break;
@@ -376,49 +406,42 @@ void View3D::Redraw() {
     }
     GLfloat org_point_size = 0.f, org_line_width = 0.f;
     GLint line_stipple_factor = 1;
-    for (int i = 0; i < gobj.opts.size(); ++i) {
-      const GeometricObject::Opt& opt = gobj.opts[i];
-      switch (opt.mode) {
-        case GeometricObject::OPT_POINT_SIZE:
-          glGetFloatv(GL_POINT_SIZE, &org_point_size);
-          glPointSize(opt.value);
-          break;
-        case GeometricObject::OPT_LINE_WIDTH:
-          glGetFloatv(GL_LINE_WIDTH, &org_line_width);
-          glLineWidth(opt.value);
-          break;
-        case GeometricObject::OPT_LINE_STIPPLE_FACTOR:
-          line_stipple_factor = opt.value;
-          break;
-        case GeometricObject::OPT_LINE_STIPPLE:
-          glLineStipple(line_stipple_factor,
-                        (static_cast<uint16_t>(opt.value) << 8) | opt.value);
-          glEnable(GL_LINE_STIPPLE);
-          break;
-        default:
-          LOG(ERROR) << "unknown opt '" << static_cast<int>(opt.mode) << "'";
+    if (decoration_) {
+      for (int i = 0; i < gobj.opts.size(); ++i) {
+        const GeometricObject::Opt& opt = gobj.opts[i];
+        switch (opt.mode) {
+          case GeometricObject::OPT_POINT_SIZE:
+            glGetFloatv(GL_POINT_SIZE, &org_point_size);
+            glPointSize(opt.value);
+            break;
+          case GeometricObject::OPT_LINE_WIDTH:
+            glGetFloatv(GL_LINE_WIDTH, &org_line_width);
+            glLineWidth(opt.value);
+            break;
+          case GeometricObject::OPT_LINE_STIPPLE_FACTOR:
+            line_stipple_factor = opt.value;
+            break;
+          case GeometricObject::OPT_LINE_STIPPLE:
+            glLineStipple(line_stipple_factor,
+                          (static_cast<uint16_t>(opt.value) << 8) | opt.value);
+            glEnable(GL_LINE_STIPPLE);
+            break;
+          default:
+            LOG(ERROR) << "unknown opt '" << static_cast<int>(opt.mode) << "'";
+        }
       }
     }
 //    LOG(INFO) << "GeomObj: " << gobj.type << " (" << gobj.num_nodes
 //        << "x" << gobj.node_size << ") " << bufidx << "/" << buf_.size();
-/*
-    if ((gobj.mode & 0x30)) {
-      const int f_mode = (gobj.mode & 0xf0);
-      glPolygonMode(GL_FRONT_AND_BACK, (gobj.mode == 0x20)? GL_POINT : GL_LINE);
-	    if (stipple) {
-//        glLineStipple(1,0xcccc);
-        glLineStipple(1,0x8888);
-        glEnable(GL_LINE_STIPPLE);
-      }
-    }
-*/
+//    if ((gobj.mode & 0x30)) {
+//      const int f_mode = (gobj.mode & 0xf0);
+//      glPolygonMode(GL_FRONT_AND_BACK, (gobj.mode == 0x20)? GL_POINT : GL_LINE);
+//    }
     glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     for (int node_idx = 0; node_idx < gobj.num_nodes; ++node_idx) {
       glBegin(type);
       glColor4ubv(gobj.color(node_idx));  // Set node color.
-      uint8_t* cc = gobj.color(node_idx);
-//      LOG(INFO) << "GeomObj: color=(" << (int)cc[0] <<","<< (int)cc[1] <<","<<
-//          (int)cc[2] <<","<< (int)cc[3] << ")";
       const float* pts = gobj.pts(node_idx);
       for (int pts_idx = 0; pts_idx < gobj.node_size; ++pts_idx) {
         const float* p = pts + 3 * pts_idx;
@@ -429,18 +452,20 @@ void View3D::Redraw() {
     glDisable(GL_BLEND);
 
     // Reset options.
-    for (int i = 0; i < gobj.opts.size(); ++i) {
-      const GeometricObject::Opt& opt = gobj.opts[i];
-      switch (opt.mode) {
-        case GeometricObject::OPT_POINT_SIZE:
-          glPointSize(org_point_size);
-          break;
-        case GeometricObject::OPT_LINE_WIDTH:
-          glLineWidth(org_line_width);
-          break;
-        case GeometricObject::OPT_LINE_STIPPLE:
-          glDisable(GL_LINE_STIPPLE);
-          break;
+    if (decoration_) {
+      for (int i = 0; i < gobj.opts.size(); ++i) {
+        const GeometricObject::Opt& opt = gobj.opts[i];
+        switch (opt.mode) {
+          case GeometricObject::OPT_POINT_SIZE:
+            glPointSize(org_point_size);
+            break;
+          case GeometricObject::OPT_LINE_WIDTH:
+            glLineWidth(org_line_width);
+            break;
+          case GeometricObject::OPT_LINE_STIPPLE:
+            glDisable(GL_LINE_STIPPLE);
+            break;
+        }
       }
     }
 
@@ -454,27 +479,33 @@ void View3D::Redraw() {
   glMatrixMode(GL_MODELVIEW);
 }
 
-bool View3D::HandleKey(unsigned char key, int x, int y) {
+bool View3D::HandleKey(int key, int special, int x, int y) {
   if (!IsInside(x, y)) return false;
+  const double step_tr = 1.0;
+  const double step_rot = M_PI / 36;
+  LOG(INFO) << "HandleKey: " << key;
   switch (key) {
-    case 'a':  cam_.pose[3] -= 1.0;  break;
-    case 'd':  cam_.pose[3] += 1.0;  break;
-    case 's':  cam_.pose[4] -= 1.0;  break;
-    case 'w':  cam_.pose[4] += 1.0;  break;
-    case 'q':  cam_.pose[5] -= 1.0;  break;
-    case 'e':  cam_.pose[5] += 1.0;  break;
-    case 'x':  cam_.pose[0] += 0.05;  break;
-    case 'y':  cam_.pose[1] += 0.05;  break;
-    case 'z':  cam_.pose[2] += 0.05;  break;
-    case 'X':  cam_.pose[0] -= 0.05;  break;
-    case 'Y':  cam_.pose[1] -= 0.05;  break;
-    case 'Z':  cam_.pose[2] -= 0.05;  break;
+    case 'a':  cam_.pose[3] += step_tr;  break;
+    case 'd':  cam_.pose[3] -= step_tr;  break;
+    case 'q':  cam_.pose[4] += step_tr;  break;
+    case 'e':  cam_.pose[4] -= step_tr;  break;
+    case 'w':  cam_.pose[5] += step_tr;  break;
+    case 's':  cam_.pose[5] -= step_tr;  break;
+    case 'x':  cam_.pose[0] += step_rot;  break;
+    case 'y':  cam_.pose[1] += step_rot;  break;
+    case 'z':  cam_.pose[2] += step_rot;  break;
+    case 'X':  cam_.pose[0] -= step_rot;  break;
+    case 'Y':  cam_.pose[1] -= step_rot;  break;
+    case 'Z':  cam_.pose[2] -= step_rot;  break;
     case 'g':  show_grid_ = !show_grid_;  break;
+    case 'h':  decoration_ = !decoration_;  break;
+    case 't':  cam_.SetTopView(10.0); break;
+    case 'T':  cam_.SetTopView(50.0); break;
     default:  return false;
   }
-  LOG(INFO) << setfill(' ') << "Camera: " << cam_.pose[0] << "," << cam_.pose[1]
-      << "," << cam_.pose[2] << "," << cam_.pose[3]
-      << "," << cam_.pose[4] << "," << cam_.pose[5];
+  LOG(INFO) << setfill(' ') << "Camera: "
+      << cam_.pose[3] << "," << cam_.pose[4] << "," << cam_.pose[5] << ","
+      << cam_.pose[0] << "," << cam_.pose[1] << "," << cam_.pose[2];
   cam_.UpdateR();
   Redraw();
   glFlush();

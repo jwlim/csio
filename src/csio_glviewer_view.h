@@ -34,7 +34,7 @@ class View {
   virtual void DrawFrame(const csio::Frame* frame_ptr) = 0;
   virtual void Redraw() = 0;
 
-  virtual bool HandleKey(unsigned char key, int x, int y) { return false; }
+  virtual bool HandleKey(int key, int special, int x, int y) { return false; }
   virtual bool HandleMouse(int button, int state, int x, int y) {
     return false;
   }
