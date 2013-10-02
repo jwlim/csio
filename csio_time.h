@@ -8,8 +8,6 @@
 #ifndef _CSIO_TIME_H_
 #define _CSIO_TIME_H_
 
-namespace csio {
-
 #if defined(WIN32) && !defined(CYGWIN)
 
 #include <windows.h>
@@ -18,6 +16,8 @@ namespace csio {
 #else
 #define DELTA_EPOCH_IN_100NANOSECS 116444736000000000ULL
 #endif
+
+namespace csio {
 
 inline double GetTimestamp() {
   // From MSDN answer to gettimeofday.
@@ -38,12 +38,16 @@ inline void GetTimestamp(unsigned int* sec, unsigned int* usec) {
   *usec = (t / 10) % 1000000;
 }
 
+}  // namespace csio
+
 #else  // defined(WIN32) && !defined(CYGWIN)
 
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <unistd.h>
+
+namespace csio {
 
 inline double GetTimestamp() {
   struct timeval tv;
@@ -58,8 +62,9 @@ inline void GetTimestamp(unsigned int* sec, unsigned int* usec) {
   *usec = tv.tv_usec;
 }
 
+}  // namespace csio
+
 #endif  // defined(WIN32) && !defined(CYGWIN)
 
-}  // namespace csio
 #endif  // _CSIO_TIME_H_
 

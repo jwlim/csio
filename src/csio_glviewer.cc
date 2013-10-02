@@ -113,11 +113,9 @@ void ViewerApp::InitializeGL() {
   glDepthFunc(GL_LESS);
   glDepthMask(GL_FALSE);
   glDisable(GL_DEPTH_TEST);
-  glDisable(GL_BLEND);
   glDisable(GL_ALPHA_TEST);
   glEnable(GL_TEXTURE_2D);
   glEnable(GL_SCISSOR_TEST);
-  glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glShadeModel(GL_FLAT);
   for (int i = 0; i < views.size(); ++i) views[i]->InitializeGL();
 }
@@ -184,7 +182,6 @@ bool ViewerApp::CheckCSIO() {
     frame_arrays.erase(frame_arrays.begin());
   }
   frame_arrays.push_back(frame_array_ptr);
-  LOG(INFO) << "frame_arrays: " << frame_arrays.size();
   display_frame_idx = 0;
   Redraw();
 
@@ -255,8 +252,8 @@ void HandleKeyInput(unsigned char key, int x, int y) {
     default: {
       const int h = the_viewer.h;
       bool handled = false;
-      for (int i = 0; i < the_viewer.views.size(); ++i) {
-        if ((handled = the_viewer.views[i]->HandleKey(key, x, h - y + 1))) break;
+      for (int i = 0; !handled && i < the_viewer.views.size(); ++i) {
+        handled = the_viewer.views[i]->HandleKey(key, 0, x, h - y + 1);
       }
       if (!handled) {
         LOG(ERROR) << "unknown key: " << static_cast<int>(key)
@@ -264,6 +261,17 @@ void HandleKeyInput(unsigned char key, int x, int y) {
       }
     }
   } 
+}
+
+void HandleSpecialKeyInput(int special, int x, int y) {
+  const int h = the_viewer.h;
+  bool handled = false;
+  for (int i = 0; !handled && i < the_viewer.views.size(); ++i) {
+    handled = the_viewer.views[i]->HandleKey(0, special, x, h - y + 1);
+  }
+  if (!handled) {
+    LOG(ERROR) << "unknown special key: " << static_cast<int>(special);
+  }
 }
 
 void HandleMouseInput(int button, int state, int x, int y) {
@@ -309,6 +317,7 @@ int main(int argc, char** argv) {
   glutDisplayFunc(&Redraw);
   glutReshapeFunc(&ResizeGLWindow);
   glutKeyboardFunc(&HandleKeyInput);
+  glutSpecialFunc(&HandleSpecialKeyInput);
   glutMouseFunc(&HandleMouseInput);
   glutMotionFunc(&HandleMouseMotion);
   if (FLAGS_pause) {
