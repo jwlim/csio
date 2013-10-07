@@ -131,7 +131,7 @@ void ViewerApp::UpdateLayout() {
     w = max(w, view->width());
   }
   LOG(INFO) << "UpdateLayout: " << views.size() << ", " << w << "x" << h;
-  glutReshapeWindow(w, h);
+  //glutReshapeWindow(w, h);
 }
 
 void ViewerApp::Redraw() {
@@ -295,6 +295,9 @@ int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   LOG(INFO) << "starting up...";
 
+  // OS X requires GLUT to run on the main thread
+  glutInit(&argc, argv);
+
   // Setup csio::InputStream.
   LOG(INFO) << "setting up csio::Inputstream (in=" << FLAGS_in << ").";
   csio::InputStream csin;
@@ -308,8 +311,6 @@ int main(int argc, char** argv) {
   }
   LOG(INFO) << "setup csio::InputStream(" << FLAGS_in << ") complete.";
 
-  // OS X requires GLUT to run on the main thread
-  glutInit(&argc, argv);
 //  glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_ALPHA | GLUT_DEPTH);
   glutInitDisplayMode(GLUT_RGBA | GLUT_ALPHA | GLUT_DEPTH);
   the_viewer.InitializeGL();
