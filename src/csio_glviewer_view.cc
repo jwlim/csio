@@ -101,6 +101,11 @@ struct GLCam {
     pose[0] = M_PI / 2;
     pose[4] = z;
   }
+  void SetFrontView(const double z = 2.0) {
+    for (int i = 0; i < 6; ++i) pose[i] = 0.0;
+    pose[4] = 0.1;
+    pose[5] = -z;
+  }
   void UpdateR() {  // Rodrigues' formula.
     const double* rot = pose;
     double th = ::sqrt(rot[0] * rot[0] + rot[1] * rot[1] + rot[2] * rot[2]);
@@ -171,7 +176,8 @@ class ViewImage : public View {
 class View3D : public View {
  public:
   View3D(int w, int h)
-      : View(), frame_ptr_(NULL), show_grid_(true), decoration_(true), cam_() {}
+      : View(), frame_ptr_(NULL), show_grid_(true), decoration_(true), cam_(),
+      point_scaler(1.f) {}
   virtual ~View3D() {}
 
   virtual void InitializeGL();
@@ -187,6 +193,8 @@ class View3D : public View {
   bool decoration_;
   GLCam cam_;
   GLGrid grid_;
+  int last_x, last_y, last_button;
+  float point_scaler;
 };
 
 //-----------------------------------------------------------------------------
@@ -412,7 +420,7 @@ void View3D::Redraw() {
         switch (opt.mode) {
           case GeometricObject::OPT_POINT_SIZE:
             glGetFloatv(GL_POINT_SIZE, &org_point_size);
-            glPointSize(opt.value);
+            glPointSize(opt.value * point_scaler);
             break;
           case GeometricObject::OPT_LINE_WIDTH:
             glGetFloatv(GL_LINE_WIDTH, &org_line_width);
@@ -481,7 +489,7 @@ void View3D::Redraw() {
 
 bool View3D::HandleKey(int key, int special, int x, int y) {
   if (!IsInside(x, y)) return false;
-  const double step_tr = 1.0;
+  const double step_tr = 0.2;
   const double step_rot = M_PI / 36;
   LOG(INFO) << "HandleKey: " << key;
   switch (key) {
@@ -501,6 +509,10 @@ bool View3D::HandleKey(int key, int special, int x, int y) {
     case 'h':  decoration_ = !decoration_;  break;
     case 't':  cam_.SetTopView(10.0); break;
     case 'T':  cam_.SetTopView(50.0); break;
+    case 'f':  cam_.SetFrontView(2.0); break;
+    case 'F':  cam_.SetFrontView(3.0); break;
+    case '+':  point_scaler += 0.1; break;
+    case '-':  point_scaler -= 0.1; break;
     default:  return false;
   }
   LOG(INFO) << setfill(' ') << "Camera: "
@@ -513,7 +525,41 @@ bool View3D::HandleKey(int key, int special, int x, int y) {
 }
 
 bool View3D::HandleMouse(int button, int state, int x, int y) {
-  if (IsInside(x, y)) return true;
+  if (IsInside(x, y)) {
+    // state == 0 := clicked
+    // state == 1 := released
+    // state == -1 := dragging
+    // button == 0 := left button
+    // button == 2 := right button
+    if(state == 0) {
+      // Button pressed, log current coordinate.
+      last_x = x; last_y = y; last_button = button;
+    } else if(state == 1) {
+      // Do something
+    } else if(state == -1) {
+      // Compute delta
+      float dx = (x - last_x)/10.f; float dy = (y - last_y)/10.f;
+      // While dragging, depending on last_button status, rotate or drag.
+      if(last_button == 0) {
+        // Drag
+        cam_.pose[3] += dx;
+        cam_.pose[5] -= dy;
+      } else if (last_button == 2) {
+        // Rotate
+        cam_.pose[0] -= (dy);
+        cam_.pose[1] -= (dx);
+      }
+      last_x = x; last_y = y;
+    }
+    LOG(INFO) << setfill(' ') << "Camera: "
+      << cam_.pose[3] << "," << cam_.pose[4] << "," << cam_.pose[5] << ","
+      << cam_.pose[0] << "," << cam_.pose[1] << "," << cam_.pose[2];
+    cam_.UpdateR();
+    Redraw();
+    glFlush();
+ 
+    return true;
+  }
   return false;
 }
 
