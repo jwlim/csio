@@ -30,11 +30,10 @@ message("-- Check for Google Flags")
 find_library(GFLAGS_LIB NAMES gflags PATHS ${SEARCH_LIBS})
 find_path(GFLAGS_INCLUDE NAMES gflags/gflags.h PATHS ${SEARCH_HEADERS})
 
-message("-- Check for Google Test")
-find_library(GTEST_LIB NAMES gtest PATHS ${SEARCH_LIBS})
-find_path(GTEST_INCLUDE NAMES gtest/gtest.h PATHS ${SEARCH_HEADERS})
-
-set(GOOGLE_LIBRARIES ${GFLAGS_LIB} ${GLOG_LIB} ${GTEST_LIB})
+message("-- Add dependencies for Google Test. You need internet connection.")
+add_subdirectory(${CMAKE_MODULE_PATH}/gtest)
+set(GTEST_LIBS ${GTEST_LIBS_DIR}/libgtest.a ${GTEST_LIBS_DIR}/libgtest_main.a)
+set(GOOGLE_LIBRARIES ${GFLAGS_LIB} ${GLOG_LIB})
 
 # Other libraries
 MESSAGE("-- Check for PNG ")
@@ -63,14 +62,15 @@ include_directories(${CSIO_INCLUDE_DIR})
 include_directories(${PNG_INCLUDE_DIRS})
 include_directories(${GLOG_INCLUDE})
 include_directories(${GFLAGS_INCLUDE})
-include_directories(${GTEST_INCLUDE})
+include_directories(${GTEST_INCLUDE_DIRS})
 
 # use sse3 instruction set
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -msse3")  # -DNDEBUG
 
 add_executable(csio_test src/csio_test.cc)
-target_link_libraries(csio_test ${GOOGLE_LIBRARIES})
+target_link_libraries(csio_test ${GOOGLE_LIBRARIES} ${GTEST_LIBS})
 add_test(csio_test csio_test)
+add_dependencies(csio_test googletest)
 
 if (FREENECT_LIB)
   include_directories(${FREENECT_INCLUDE})
