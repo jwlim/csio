@@ -51,8 +51,8 @@ if (APPLE)
   set(CMAKE_EXE_LINKER_FLAGS "-framework OpenGL -framework GLUT")
 else (APPLE)  # Linux, not so much
   find_package(OpenGL REQUIRED)
-  find_package(GLUT REQUIRED)
-  include_directories(${OPENGL_INCLUDE_DIRS} ${GLUT_INCLUDE_DIRS})
+  find_package(FREEGLUT REQUIRED)
+  include_directories(${OPENGL_INCLUDE_DIRS} ${FREEGLUT_INCLUDE_DIRS})
 endif (APPLE)
 
 # directories
@@ -80,7 +80,7 @@ endif (FREENECT_LIB)
 
 add_executable(csio_glviewer
     src/csio_glviewer.cc src/csio_glviewer_view.cc src/image_file.cc)
-target_link_libraries(csio_glviewer ${GOOGLE_LIBRARIES} ${PNG_LIBRARY})
+target_link_libraries(csio_glviewer ${GOOGLE_LIBRARIES} ${PNG_LIBRARY} ${OPENGL_LIBRARIES} ${FREEGLUT_LIBRARY})
 
 add_executable(spm2csio src/spm2csio.cc)
 target_link_libraries(spm2csio ${GOOGLE_LIBRARIES} ${PNG_LIBRARY})
