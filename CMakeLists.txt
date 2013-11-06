@@ -85,3 +85,5 @@ target_link_libraries(csio_glviewer ${GOOGLE_LIBRARIES} ${PNG_LIBRARY} ${OPENGL_
 add_executable(spm2csio src/spm2csio.cc)
 target_link_libraries(spm2csio ${GOOGLE_LIBRARIES} ${PNG_LIBRARY})
 
+add_executable(simple_ply_viewer src/simple_ply_viewer.cc src/zpr.cc src/image_file.cc)
+target_link_libraries(simple_ply_viewer ${GOOGLE_LIBRARIES} ${PNG_LIBRARY} ${OPENGL_LIBRARIES} ${FREEGLUT_LIBRARY})

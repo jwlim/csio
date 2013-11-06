@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.8)
+cmake_minimum_required(VERSION 2.8.7)
 project(gtest_builder C CXX)
 
 # Refer to http://www.kitware.com/media/html/BuildingExternalProjectsWithCMake2.8.html
