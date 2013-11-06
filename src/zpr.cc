@@ -1,4 +1,4 @@
-#include <iostream>
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <memory.h>
@@ -24,8 +24,6 @@ static int  _mouseY      = 0;
 static bool _mouseLeft   = false;
 static bool _mouseMiddle = false;
 static bool _mouseRight  = false;
-static bool _mouseScroolUp = false;
-static bool _mouseScroolDown = false;
 
 static double _dragPosX  = 0.0;
 static double _dragPosY  = 0.0;
@@ -98,15 +96,18 @@ static void zprMouse(int button, int state, int x, int y) {
   if ( button == GLUT_WHEEL_UP || button == GLUT_WHEEL_DOWN ) {
     int diff = 0;
     switch (button) {
-      case GLUT_WHEEL_UP: 
+      case GLUT_WHEEL_UP:
         diff = 1;
         break;
-      case GLUT_WHEEL_DOWN:  
+      case GLUT_WHEEL_DOWN:
         diff = -1;
         break;
     }
     double s = exp((double)diff*0.01);
+    glTranslatef( zprReferencePoint[0], zprReferencePoint[1], zprReferencePoint[2]);
     glScalef(s,s,s);
+    glTranslatef(-zprReferencePoint[0],-zprReferencePoint[1],-zprReferencePoint[2]);
+    getMatrix();
   }
 
   glGetIntegerv(GL_VIEWPORT,viewport);
@@ -127,10 +128,10 @@ static void zprMotion(int x, int y) {
     return;
 
   if (_mouseMiddle || (_mouseLeft && _mouseRight)) {
-    //double s = exp((double)dy*0.01);
-    //glTranslatef( zprReferencePoint[0], zprReferencePoint[1], zprReferencePoint[2]);
-    //glScalef(s,s,s);
-    //glTranslatef(-zprReferencePoint[0],-zprReferencePoint[1],-zprReferencePoint[2]);
+    double s = exp((double)dy*0.01);
+    glTranslatef( zprReferencePoint[0], zprReferencePoint[1], zprReferencePoint[2]);
+    glScalef(s,s,s);
+    glTranslatef(-zprReferencePoint[0],-zprReferencePoint[1],-zprReferencePoint[2]);
     changed = true;
   } else {
       if (_mouseLeft) {
