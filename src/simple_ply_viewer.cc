@@ -236,13 +236,13 @@ void draw_axes(void) {
                                 /* No name for grey sphere */
 
   glColor3f(0.3,0.3,0.3);
-  glutSolidSphere(0.7, 20, 20);
+  glutSolidSphere(0.1, 20, 20);
 
   glPushMatrix();
   glPushName(1);            /* Red cone is 1 */
     glColor3f(1,0,0);
     glRotatef(90,0,1,0);
-    glutSolidCone(0.6, 4.0, 20, 20);
+    glutSolidCone(0.1, 1.0, 20, 20);
   glPopName();
   glPopMatrix();
 
@@ -250,13 +250,13 @@ void draw_axes(void) {
   glPushName(2);            /* Green cone is 2 */
     glColor3f(0,1,0);
     glRotatef(-90,1,0,0);
-    glutSolidCone(0.6, 4.0, 20, 20);
+    glutSolidCone(0.1, 1.0, 20, 20);
   glPopName();
   glPopMatrix();
 
   glColor3f(0,0,1);         /* Blue cone is 3 */
     glPushName(3);
-      glutSolidCone(0.6, 4.0, 20, 20);
+      glutSolidCone(0.1, 1.0, 20, 20);
     glPopName();
   glPopMatrix();
 }
@@ -284,26 +284,24 @@ void load_ply(const char *filename,
   // WARNING:
   // THIS ASSUMES A VERY STRICT FORMAT FROM MESHLAB!
   // Change this if nothing renders correctly
-  fgets(line, sizeof(line), fp); printf("%s\n", line);
-  fgets(line, sizeof(line), fp); printf("%s\n", line);
-  fgets(line, sizeof(line), fp); printf("%s\n", line);
+  fgets(line, sizeof(line), fp); 
+  fgets(line, sizeof(line), fp);
+  fgets(line, sizeof(line), fp);
   sscanf(line, "%s %s %d", dum_s, dum_s, &n_face);
-  fgets(line, sizeof(line), fp); printf("%s\n", line);
-  fgets(line, sizeof(line), fp); printf("%s\n", line);
+  fgets(line, sizeof(line), fp);
+  fgets(line, sizeof(line), fp);
   sscanf(line, "%s %s %d", dum_s, dum_s, &n_vertex);
-  fgets(line, sizeof(line), fp); printf("%s\n", line);
-  fgets(line, sizeof(line), fp); printf("%s\n", line);
-  fgets(line, sizeof(line), fp); printf("%s\n", line);
-  fgets(line, sizeof(line), fp); printf("%s\n", line);
-  fgets(line, sizeof(line), fp); printf("%s\n", line);
-  fgets(line, sizeof(line), fp); printf("%s\n", line);
-  fgets(line, sizeof(line), fp); printf("%s\n", line);
+  fgets(line, sizeof(line), fp);
+  fgets(line, sizeof(line), fp);
+  fgets(line, sizeof(line), fp);
+  fgets(line, sizeof(line), fp);
+  fgets(line, sizeof(line), fp);
+  fgets(line, sizeof(line), fp);
+  fgets(line, sizeof(line), fp);
 
   points.resize(n_vertex);
   colors.resize(n_vertex);
   faces.resize(n_face);
-
-  printf("%d %d\n",n_vertex, n_face);
 
   for(int i=0; i < n_vertex; i++) {
     fgets(line, sizeof(line), fp);
