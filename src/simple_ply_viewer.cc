@@ -12,17 +12,20 @@
 #include <GL/glu.h>
 #endif
 
+#include <iostream>
 #include <vector>
 #include <cstdio>
 #include "zpr.h"
 #include "image_file.h"
+
+#include <gflags/gflags.h>
 
 using namespace std;
 using namespace csio;
 
 #define ENABLE_CONTROL_RECORDING // record key/mouse input for offline rendering into a movie
 
-const int FPS_record = 25;
+DEFINE_int32(fps, 25, "Frame per second");
 
 // Drawing primitives
 struct Point3f {
@@ -37,6 +40,7 @@ struct Face {
     unsigned int a, b, c;
 };
 
+void draw_cameras(void);
 void draw_axes(void);
 void display(void);
 void idle(void);
@@ -52,16 +56,161 @@ vector <double*> g_gl_states;
 int g_time = 0;
 int g_timebase = 0;
 bool g_playback = false;
+bool g_capture = false;
 double g_projection_matrix[16];
 
+#define NUM_CAMERA_PARAMS 9
+#define POLY_INVERSE_DEGREE 6
+
+typedef struct {
+    double R[9];     /* Rotation */
+    double t[3];     /* Translation */
+    double f;        /* Focal length */
+    double k[2];     /* Undistortion parameters */
+    double k_inv[POLY_INVERSE_DEGREE]; /* Inverse undistortion parameters */
+    char constrained[NUM_CAMERA_PARAMS];
+    double constraints[NUM_CAMERA_PARAMS];  /* Constraints (if used) */
+    double weights[NUM_CAMERA_PARAMS];      /* Weights on the constraints */
+    double K_known[9];  /* Intrinsics (if known) */
+    double k_known[5];  /* Distortion params (if known) */
+
+    char fisheye;            /* Is this a fisheye image? */
+    char known_intrinsics;   /* Are the intrinsics known? */
+    double f_cx, f_cy;       /* Fisheye center */
+    double f_rad, f_angle;   
+    
+#define NUM_CAMERA_PARAMS 9
+#define POLY_INVERSE_DEGREE 6/* Other fisheye parameters */
+    double f_focal;          /* Fisheye focal length */
+
+    double f_scale, k_scale; /* Scale on focal length, distortion params */
+} camera_params_t;
+
+typedef struct
+{
+    double pos[3];
+    double color[3];
+} point_t;
+
+// Bundle file.
+std::vector<camera_params_t> cameras;
+std::vector<point_t> points;
+double bundle_version;
+
+void ReadBundleFile(char *bundle_file,
+                    std::vector<camera_params_t> &cameras,
+                    std::vector<point_t> &points, double &bundle_version)
+{
+    FILE *f = fopen(bundle_file, "r");
+    if (f == NULL) {
+  printf("Error opening file %s for reading\n", bundle_file);
+  return;
+    }
+
+    int num_images, num_points;
+
+    char first_line[256];
+    fgets(first_line, 256, f);
+    if (first_line[0] == '#') {
+        double version;
+        sscanf(first_line, "# Bundle file v%lf", &version);
+
+        bundle_version = version;
+        printf("[ReadBundleFile] Bundle version: %0.3f\n", version);
+
+        fscanf(f, "%d %d\n", &num_images, &num_points);
+    } else if (first_line[0] == 'v') {
+        double version;
+        sscanf(first_line, "v%lf", &version);
+        bundle_version = version;
+        printf("[ReadBundleFile] Bundle version: %0.3f\n", version);
+
+        fscanf(f, "%d %d\n", &num_images, &num_points);
+    } else {
+        bundle_version = 0.1;
+        sscanf(first_line, "%d %d\n", &num_images, &num_points);
+    }
+
+    printf("[ReadBundleFile] Reading %d images and %d points...\n",
+     num_images, num_points);
+
+    /* Read cameras */
+    for (int i = 0; i < num_images; i++) {
+  double focal_length, k0, k1;
+  double R[9];
+  double t[3];
+
+        if (bundle_version < 0.2) {
+            /* Focal length */
+            fscanf(f, "%lf\n", &focal_length);
+        } else {
+            fscanf(f, "%lf %lf %lf\n", &focal_length, &k0, &k1);
+        }
+
+  /* Rotation */
+  fscanf(f, "%lf %lf %lf\n%lf %lf %lf\n%lf %lf %lf\n",
+         R+0, R+1, R+2, R+3, R+4, R+5, R+6, R+7, R+8);
+  /* Translation */
+  fscanf(f, "%lf %lf %lf\n", t+0, t+1, t+2);
+
+        // if (focal_length == 0.0)
+        //     continue;
+
+        camera_params_t cam;
+
+        cam.f = focal_length;
+        memcpy(cam.R, R, sizeof(double) * 9);
+        memcpy(cam.t, t, sizeof(double) * 3);
+
+        cameras.push_back(cam);
+    }
+
+    /* Read points */
+    for (int i = 0; i < num_points; i++) {
+  point_t pt;
+
+  /* Position */
+  fscanf(f, "%lf %lf %lf\n",
+         pt.pos + 0, pt.pos + 1, pt.pos + 2);
+
+  /* Color */
+  fscanf(f, "%lf %lf %lf\n",
+         pt.color + 0, pt.color + 1, pt.color + 2);
+
+  int num_visible;
+  fscanf(f, "%d", &num_visible);
+
+  for (int j = 0; j < num_visible; j++) {
+      int view, key;
+      fscanf(f, "%d %d", &view, &key);
+
+            double x, y;
+            if (bundle_version >= 0.3)
+                fscanf(f, "%lf %lf", &x, &y);
+  }
+
+        if (num_visible > 0) {
+            points.push_back(pt);
+        }
+    }
+
+    fclose(f);
+}
+
+
 int main(int argc, char **argv) {
-  if(argc < 2) {
-    printf("./simple_ply_viewer model.ply [playback.bin]\n");
+  if(argc < 3) {
+    printf("./simple_ply_viewer model.ply bundle.out [playback.bin]\n");
     return 0;
   }
 
+  /* Read the bundle file */
   if(argc == 3) {
-    load_playback(argv[2], g_projection_matrix, g_gl_states);
+    ReadBundleFile(argv[2], cameras, points, bundle_version);
+  }
+
+  if(argc == 4) {
+    load_playback(argv[3], g_projection_matrix, g_gl_states);
   }
 
   /* Initialise GLUT and create a window */
@@ -103,8 +252,7 @@ void idle(void) {
       glLoadMatrixd(g_gl_states[i]);
       display();
       if(width % 4 != 0) glPixelStorei(GL_PACK_ALIGNMENT, width % 2 ? 1 : 2);
-      glReadPixels(0, 0, width, height, GL_BGR, GL_UNSIGNED_BYTE, img.data());
-
+      glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, img.data());
       char file[512];
       sprintf(file, "frame-%06d.png", i);
 
@@ -121,7 +269,28 @@ void idle(void) {
         WriteRGB8ToPNG(img.data(), width, height, width * 3, file);
     }
     exit(0);
+  } else if (g_capture) {
+    int width = glutGet(GLUT_WINDOW_WIDTH );
+    int height = glutGet(GLUT_WINDOW_HEIGHT);
+    vector<char> img;
+    img.resize(width*height*3);
+    if(width % 4 != 0) glPixelStorei(GL_PACK_ALIGNMENT, width % 2 ? 1 : 2);
+    glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, img.data());
+    char* buf = img.data();
+      for (int y = 0; y < height / 2; ++y) {
+        char* p0 = &buf[y * width * 3];
+        char* p1 = &buf[(height - 1 - y) * width * 3];
+        for (int i = 0; i < width * 3; ++i, ++p0, ++p1) {
+          char tmp = *p0;
+          *p0 = *p1;
+          *p1 = tmp;
+        }
+      }
+    WriteRGB8ToPNG(img.data(), width, height, width * 3, "capture.png");
+    std::cout << "Captured. see capture.png" << std::endl;
+    g_capture = false;
   }
+
   glutPostRedisplay();
 }
 
@@ -151,9 +320,10 @@ void load_playback(const char *filename,
 void display(void) {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glEnable(GL_DEPTH_TEST);
+  draw_cameras();
   draw_axes();
-  glBegin(GL_TRIANGLES);
 
+  glBegin(GL_TRIANGLES);
   for(unsigned int i=0; i < g_faces.size(); i++) {
     int a = g_faces[i].a;
     int b = g_faces[i].b;
@@ -171,22 +341,19 @@ void display(void) {
   glEnd();
 
   glBegin(GL_POINTS);
-
   for(unsigned int i=0; i < g_points.size(); ++i) {
     glColor3ub(g_colors[i].r, g_colors[i].g, g_colors[i].b);
     glVertex3f(g_points[i].x, g_points[i].y, g_points[i].z);
   }
   glEnd();
 
-
 #ifdef ENABLE_CONTROL_RECORDING
   if(!g_playback) {
     g_time = glutGet(GLUT_ELAPSED_TIME);
 
-    if ( (g_time - g_timebase) > (1000 / FPS_record) ) {
+    if ( (g_time - g_timebase) > (1000 / FLAGS_fps) ) {
       double *m = new double[16];
       glGetDoublev(GL_MODELVIEW_MATRIX, m);
-
 #if 0
       printf("\n");
       printf("%f %f %f %f\n", m[0], m[1], m[2], m[3]);
@@ -199,6 +366,7 @@ void display(void) {
     }
   }
 #endif
+
   glutSwapBuffers();
 }
 
@@ -223,6 +391,46 @@ void keyboard(unsigned char key, int x, int y) {
     fclose(fp);
 
 		exit(0);
+  } else if (key == 'c') {
+    // Self capture
+    g_capture = true;
+  }
+}
+
+void draw_cameras(void) {
+  GLfloat m[16];
+  for (unsigned int i = 0; i < cameras.size(); ++i) {
+    glPushMatrix();
+      const double *t = cameras[i].t, *r = cameras[i].R;
+#define M(row,col)  m[col*4+row]
+    M(0, 0) = r[0]; M(0, 1) = r[1]; M(0, 2) = r[2]; M(0, 3) = 0.0;
+    M(1, 0) = r[3]; M(1, 1) = r[4]; M(1, 2) = r[5]; M(1, 3) = 0.0;
+    M(2, 0) = r[6]; M(2, 1) = r[7]; M(2, 2) = r[8]; M(2, 3) = 0.0;
+    M(3, 0) = 0.0; M(3, 1) = 0.0; M(3, 2) = 0.0; M(3, 3) = 1.0;
+#undef M
+      glTranslatef(t[0], t[1], t[2]);
+      glMultMatrixf(m);
+      glColor3f(0.3, 0.3, 0.3);
+      glutSolidSphere(0.05, 20, 20); 
+        glPushMatrix();
+          glPushName(1);
+            glColor3f(1,0,0);
+            glRotatef(90,0,1,0);
+            glutSolidCone(0.03, 0.3, 20, 20);
+          glPopName();
+        glPopMatrix();
+        glPushMatrix ();
+          glPushName(2);            /* Green cone is 2 */
+            glColor3f(0,1,0);
+            glRotatef(-90,1,0,0);
+            glutSolidCone(0.03, 0.3, 20, 20);
+          glPopName();
+        glPopMatrix();
+          glColor3f(0,0,1);         /* Blue cone is 3 */
+          glPushName(3);
+            glutSolidCone(0.03, 0.3, 20, 20);
+          glPopName();
+    glPopMatrix();
   }
 }
 
@@ -236,13 +444,13 @@ void draw_axes(void) {
                                 /* No name for grey sphere */
 
   glColor3f(0.3,0.3,0.3);
-  glutSolidSphere(0.1, 20, 20);
+  glutSolidSphere(0.05, 20, 20);
 
   glPushMatrix();
   glPushName(1);            /* Red cone is 1 */
     glColor3f(1,0,0);
     glRotatef(90,0,1,0);
-    glutSolidCone(0.1, 1.0, 20, 20);
+    glutSolidCone(0.03, 0.3, 20, 20);
   glPopName();
   glPopMatrix();
 
@@ -250,13 +458,13 @@ void draw_axes(void) {
   glPushName(2);            /* Green cone is 2 */
     glColor3f(0,1,0);
     glRotatef(-90,1,0,0);
-    glutSolidCone(0.1, 1.0, 20, 20);
+    glutSolidCone(0.03, 0.3, 20, 20);
   glPopName();
   glPopMatrix();
 
   glColor3f(0,0,1);         /* Blue cone is 3 */
     glPushName(3);
-      glutSolidCone(0.1, 1.0, 20, 20);
+      glutSolidCone(0.03, 0.3, 20, 20);
     glPopName();
   glPopMatrix();
 }
