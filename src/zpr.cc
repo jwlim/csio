@@ -1,3 +1,4 @@
+#include <iostream>
 #include <stdlib.h>
 #include <stdio.h>
 #include <memory.h>
@@ -23,6 +24,8 @@ static int  _mouseY      = 0;
 static bool _mouseLeft   = false;
 static bool _mouseMiddle = false;
 static bool _mouseRight  = false;
+static bool _mouseScroolUp = false;
+static bool _mouseScroolDown = false;
 
 static double _dragPosX  = 0.0;
 static double _dragPosY  = 0.0;
@@ -32,9 +35,9 @@ static double _matrix[16];
 static double _matrixInverse[16];
 
 static double vlen(double x,double y,double z);
-static void   pos(double *px,double *py,double *pz,const int x,const int y,const int *viewport);
-static void   getMatrix();
-static void   invertMatrix(const GLdouble *m, GLdouble *out );
+static void pos(double *px,double *py,double *pz,const int x,const int y,const int *viewport);
+static void getMatrix();
+static void invertMatrix(const GLdouble *m, GLdouble *out );
 
 static void zprReshape(int w,int h);
 static void zprMouse(int button, int state, int x, int y);
@@ -46,139 +49,136 @@ static void zprPick(GLdouble x, GLdouble y,GLdouble delX, GLdouble delY);
 
 GLfloat zprReferencePoint[4] = { 0,0,0,0 };
 
-void
-zprInit()
-{
-    getMatrix();
-
-    glutReshapeFunc(zprReshape);
-    glutMouseFunc(zprMouse);
-    glutMotionFunc(zprMotion);
+void zprInit() {
+  getMatrix();
+  glutReshapeFunc(zprReshape);
+  glutMouseFunc(zprMouse);
+  glutMotionFunc(zprMotion);
 }
 
-static void
-zprReshape(int w,int h)
-{
-    glViewport(0,0,w,h);
+static void zprReshape(int w,int h) {
+  glViewport(0,0,w,h);
 
-    _top    =  1.0;
-    _bottom = -1.0;
-    _left   = -(double)w/(double)h;
-    _right  = -_left;
+  _top    =  1.0;
+  _bottom = -1.0;
+  _left   = -(double)w/(double)h;
+  _right  = -_left;
 
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    glOrtho(_left,_right,_bottom,_top,_zNear,_zFar);
+  glMatrixMode(GL_PROJECTION);
+  glLoadIdentity();
+  glOrtho(_left,_right,_bottom,_top,_zNear,_zFar);
 
-    glMatrixMode(GL_MODELVIEW);
+  glMatrixMode(GL_MODELVIEW);
 }
 
-static void
-zprMouse(int button, int state, int x, int y)
-{
-   GLint viewport[4];
+static void zprMouse(int button, int state, int x, int y) {
+  GLint viewport[4];
 
-   /* Do picking */
-   if (state==GLUT_DOWN)
-      zprPick(x,glutGet(GLUT_WINDOW_HEIGHT)-1-y,3,3);
+  /* Do picking */
+  if (state==GLUT_DOWN)
+    zprPick(x,glutGet(GLUT_WINDOW_HEIGHT)-1-y,3,3);
 
-    _mouseX = x;
-    _mouseY = y;
+  _mouseX = x;
+  _mouseY = y;
 
-    if (state==GLUT_UP)
-        switch (button)
-        {
-            case GLUT_LEFT_BUTTON:   _mouseLeft   = false; break;
-            case GLUT_MIDDLE_BUTTON: _mouseMiddle = false; break;
-            case GLUT_RIGHT_BUTTON:  _mouseRight  = false; break;
-        }
-    else
-        switch (button)
-        {
-            case GLUT_LEFT_BUTTON:   _mouseLeft   = true; break;
-            case GLUT_MIDDLE_BUTTON: _mouseMiddle = true; break;
-            case GLUT_RIGHT_BUTTON:  _mouseRight  = true; break;
-        }
+  if (state==GLUT_UP) {
+    switch (button) {
+      case GLUT_LEFT_BUTTON:   _mouseLeft   = false; break;
+      case GLUT_MIDDLE_BUTTON: _mouseMiddle = false; break;
+      case GLUT_RIGHT_BUTTON:  _mouseRight  = false; break;
+    }
+  } else {
+    switch (button) {
+      case GLUT_LEFT_BUTTON:   _mouseLeft   = true; break;
+      case GLUT_MIDDLE_BUTTON: _mouseMiddle = true; break;
+      case GLUT_RIGHT_BUTTON:  _mouseRight  = true; break;
+    }
+  }
 
-    glGetIntegerv(GL_VIEWPORT,viewport);
-    pos(&_dragPosX,&_dragPosY,&_dragPosZ,x,y,viewport);
-    glutPostRedisplay();
+  if ( button == GLUT_WHEEL_UP || button == GLUT_WHEEL_DOWN ) {
+    int diff = 0;
+    switch (button) {
+      case GLUT_WHEEL_UP: 
+        diff = 1;
+        break;
+      case GLUT_WHEEL_DOWN:  
+        diff = -1;
+        break;
+    }
+    double s = exp((double)diff*0.01);
+    glScalef(s,s,s);
+  }
+
+  glGetIntegerv(GL_VIEWPORT,viewport);
+  pos(&_dragPosX,&_dragPosY,&_dragPosZ,x,y,viewport);
+  glutPostRedisplay();
 }
 
-static void
-zprMotion(int x, int y)
-{
-    bool changed = false;
+static void zprMotion(int x, int y) {
+  bool changed = false;
 
-    const int dx = x - _mouseX;
-    const int dy = y - _mouseY;
+  const int dx = x - _mouseX;
+  const int dy = y - _mouseY;
 
-    GLint viewport[4];
-    glGetIntegerv(GL_VIEWPORT,viewport);
+  GLint viewport[4];
+  glGetIntegerv(GL_VIEWPORT,viewport);
 
-    if (dx==0 && dy==0)
-        return;
+  if (dx==0 && dy==0)
+    return;
 
-    if (_mouseMiddle || (_mouseLeft && _mouseRight))
-    {
-        double s = exp((double)dy*0.01);
+  if (_mouseMiddle || (_mouseLeft && _mouseRight)) {
+    //double s = exp((double)dy*0.01);
+    //glTranslatef( zprReferencePoint[0], zprReferencePoint[1], zprReferencePoint[2]);
+    //glScalef(s,s,s);
+    //glTranslatef(-zprReferencePoint[0],-zprReferencePoint[1],-zprReferencePoint[2]);
+    changed = true;
+  } else {
+      if (_mouseLeft) {
+        double ax,ay,az;
+        double bx,by,bz;
+        double angle;
+
+        ax = dy;
+        ay = dx;
+        az = 0.0;
+        angle = vlen(ax,ay,az)/(double)(viewport[2]+1)*180.0;
+
+        /* Use inverse matrix to determine local axis of rotation */
+        bx = _matrixInverse[0]*ax + _matrixInverse[4]*ay + _matrixInverse[8] *az;
+        by = _matrixInverse[1]*ax + _matrixInverse[5]*ay + _matrixInverse[9] *az;
+        bz = _matrixInverse[2]*ax + _matrixInverse[6]*ay + _matrixInverse[10]*az;
 
         glTranslatef( zprReferencePoint[0], zprReferencePoint[1], zprReferencePoint[2]);
-        glScalef(s,s,s);
+        glRotatef(angle,bx,by,bz);
         glTranslatef(-zprReferencePoint[0],-zprReferencePoint[1],-zprReferencePoint[2]);
 
         changed = true;
-    }
-    else
-        if (_mouseLeft)
-        {
-            double ax,ay,az;
-            double bx,by,bz;
-            double angle;
+     } else {
+         if (_mouseRight) {
+           double px,py,pz;
 
-            ax = dy;
-            ay = dx;
-            az = 0.0;
-            angle = vlen(ax,ay,az)/(double)(viewport[2]+1)*180.0;
+           pos(&px,&py,&pz,x,y,viewport);
 
-            /* Use inverse matrix to determine local axis of rotation */
+           glLoadIdentity();
+           glTranslatef(px-_dragPosX,py-_dragPosY,pz-_dragPosZ);
+           glMultMatrixd(_matrix);
 
-            bx = _matrixInverse[0]*ax + _matrixInverse[4]*ay + _matrixInverse[8] *az;
-            by = _matrixInverse[1]*ax + _matrixInverse[5]*ay + _matrixInverse[9] *az;
-            bz = _matrixInverse[2]*ax + _matrixInverse[6]*ay + _matrixInverse[10]*az;
+           _dragPosX = px;
+           _dragPosY = py;
+           _dragPosZ = pz;
 
-            glTranslatef( zprReferencePoint[0], zprReferencePoint[1], zprReferencePoint[2]);
-            glRotatef(angle,bx,by,bz);
-            glTranslatef(-zprReferencePoint[0],-zprReferencePoint[1],-zprReferencePoint[2]);
+           changed = true;
+         }
+     }
+  }
 
-            changed = true;
-        }
-        else
-            if (_mouseRight)
-            {
-                double px,py,pz;
+  _mouseX = x;
+  _mouseY = y;
 
-                pos(&px,&py,&pz,x,y,viewport);
-
-                glLoadIdentity();
-                glTranslatef(px-_dragPosX,py-_dragPosY,pz-_dragPosZ);
-                glMultMatrixd(_matrix);
-
-                _dragPosX = px;
-                _dragPosY = py;
-                _dragPosZ = pz;
-
-                changed = true;
-            }
-
-    _mouseX = x;
-    _mouseY = y;
-
-    if (changed)
-    {
-        getMatrix();
-        glutPostRedisplay();
-    }
+  if (changed) {
+    getMatrix();
+    glutPostRedisplay();
+  }
 }
 
 /*****************************************************************
@@ -186,33 +186,29 @@ zprMotion(int x, int y)
  *****************************************************************/
 
 static double
-vlen(double x,double y,double z)
-{
-    return sqrt(x*x+y*y+z*z);
+vlen(double x,double y,double z) {
+  return sqrt(x*x+y*y+z*z);
 }
 
 static void
-pos(double *px,double *py,double *pz,const int x,const int y,const int *viewport)
-{
-    /*
-      Use the ortho projection and viewport information
-      to map from mouse co-ordinates back into world
-      co-ordinates
-    */
+pos(double *px,double *py,double *pz,const int x,const int y,const int *viewport) {
+  /*
+    Use the ortho projection and viewport information
+    to map from mouse co-ordinates back into world
+    co-ordinates
+  */
 
-    *px = (double)(x-viewport[0])/(double)(viewport[2]);
-    *py = (double)(y-viewport[1])/(double)(viewport[3]);
+  *px = (double)(x-viewport[0])/(double)(viewport[2]);
+  *py = (double)(y-viewport[1])/(double)(viewport[3]);
 
-    *px = _left + (*px)*(_right-_left);
-    *py = _top  + (*py)*(_bottom-_top);
-    *pz = _zNear;
+  *px = _left + (*px)*(_right-_left);
+  *py = _top  + (*py)*(_bottom-_top);
+  *pz = _zNear;
 }
 
-static void
-getMatrix()
-{
-    glGetDoublev(GL_MODELVIEW_MATRIX,_matrix);
-    invertMatrix(_matrix,_matrixInverse);
+static void getMatrix() {
+  glGetDoublev(GL_MODELVIEW_MATRIX,_matrix);
+  invertMatrix(_matrix,_matrixInverse);
 }
 
 /*
@@ -222,8 +218,7 @@ getMatrix()
  */
 
 static void
-invertMatrix(const GLdouble *m, GLdouble *out )
-{
+invertMatrix(const GLdouble *m, GLdouble *out ) {
 
 /* NB. OpenGL Matrices are COLUMN major. */
 #define MAT(m,r,c) (m)[(c)*4+(r)]

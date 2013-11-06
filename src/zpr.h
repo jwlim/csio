@@ -63,6 +63,11 @@
 #include <GL/glu.h>
 #endif
 
+#if !defined(GLUT_WHEEL_UP)
+#  define GLUT_WHEEL_UP   3
+#  define GLUT_WHEEL_DOWN 4
+#endif
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -72,29 +77,25 @@ extern "C"
  *
  */
 
-struct ZPRState
-{
-    int  _mouseX;
-    int  _mouseY;
-    bool _mouseLeft;
-    bool _mouseMiddle;
-    bool _mouseRight;
+struct ZPRState {
+  int  _mouseX;
+  int  _mouseY;
+  bool _mouseLeft;
+  bool _mouseMiddle;
+  bool _mouseRight;
 
-    double _dragPosX;
-    double _dragPosY;
-    double _dragPosZ;
-    double _matrix[16];
-    double _matrixInverse[16];
+  double _dragPosX;
+  double _dragPosY;
+  double _dragPosZ;
+  double _matrix[16];
+  double _matrixInverse[16];
 };
 
 /* Mouse Manipulation API */
-
 void zprInit();
-
 extern GLfloat zprReferencePoint[4];
 
 /* Picking API (Optional) */
-
 extern void zprSelectionFunc(void (*f)(void));      /* Selection-mode draw function */
 extern void zprPickFunc(void (*f)(GLint name));     /* Pick event handling function */
 
