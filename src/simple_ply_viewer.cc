@@ -123,6 +123,7 @@ bool g_record_start = false;
 bool g_capture = false;
 bool g_motion = false;
 bool g_camfollow = false;
+bool g_save = false;
 double g_projection_matrix[16];
 
 #define NUM_CAMERA_PARAMS 9
@@ -371,28 +372,37 @@ void idle(void) {
     img.resize(width*height*3);
     int index = 0;
     for (int i = 1; i < cameras.size(); i++) {
-      const double *tc = cameras[i].t, *rc = cameras[i].R, *tp = cameras[i-1].t;
-      const int N = 50;
+      const double *tc = cameras[i].t, *rc = cameras[i].R, *tp = cameras[i-1].t,
+            *rp = cameras[i-1].R;
+      const int N = 5;
       double t[3];
+      double u[3];
       double v = 0;
       // Interpolated view.
       for (int k = 0; k < N; k++) {
         std::cout << i << "/" << cameras.size() << ", k= " << k << "/" << N << "\n";
-        v = (double)k / (double)N;
-        v = 0.5 - cos(-v * M_PI) * 0.5;
+        v = (double)k / (double)N; 
+        //v = 0.5 - cos(-v * M_PI) * 0.5;
         t[0] = ((tc[0] * v) + (tp[0] * (1 - v)));
         t[1] = ((tc[1] * v) + (tp[1] * (1 - v)));
         t[2] = ((tc[2] * v) + (tp[2] * (1 - v)));
+        u[0] = ((rc[1] * v) + (rp[1] * (1 - v)));
+        u[1] = ((rc[4] * v) + (rp[4] * (1 - v)));
+        u[2] = ((rc[7] * v) + (rp[7] * (1 - v)));
+
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
-        gluLookAt(t[0], t[1], t[2], 0, 0, 3, 0, -1, 0);
-        display();
-        if(width % 4 != 0) glPixelStorei(GL_PACK_ALIGNMENT, width % 2 ? 1 : 2);
-       glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, img.data());
-       char file[512];
-       sprintf(file, "keyview-%06d.png", index++);
 
-        char* buf = img.data();
+        gluLookAt(t[0], t[1], t[2], 0, 0, 3, -u[0], -u[1], -u[2]);
+        display();
+
+        if(g_save) {
+          if(width % 4 != 0) glPixelStorei(GL_PACK_ALIGNMENT, width % 2 ? 1 : 2);
+          glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, img.data());
+          char file[512];
+          sprintf(file, "keyview-%06d.png", index++);
+
+          char* buf = img.data();
           for (int y = 0; y < height / 2; ++y) {
             char* p0 = &buf[y * width * 3];
             char* p1 = &buf[(height - 1 - y) * width * 3];
@@ -402,7 +412,8 @@ void idle(void) {
                 *p1 = tmp;
               }
           }
-        WriteRGB8ToPNG(img.data(), width, height, width * 3, file);
+          WriteRGB8ToPNG(img.data(), width, height, width * 3, file);
+        }
       }
     }
     g_camfollow = false;
@@ -553,6 +564,10 @@ void keyboard(unsigned char key, int x, int y) {
       std::cout << "Record stopped\n";
       g_record_start = false;
     }
+    if (g_save == false)
+      g_save = true;
+    else
+      g_save = false;
   } else if (key == 'm') {
     g_motion = true;
   } else if (key == 'o') {
