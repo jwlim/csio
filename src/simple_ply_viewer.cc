@@ -15,6 +15,8 @@
 #include <iostream>
 #include <vector>
 #include <cstdio>
+#include <string.h>
+#include <math.h>
 #include "zpr.h"
 #include "image_file.h"
 
@@ -40,6 +42,67 @@ struct Face {
     unsigned int a, b, c;
 };
 
+struct GLCam {
+  double fov, near_clip, far_clip;
+  double pose[6];
+  double R[9];  // 3x3 matrix (column major).
+  bool ortho;
+
+  GLCam() : fov(60), near_clip(0.1), far_clip(1000.0), ortho(false) {
+    for (int i = 0; i < 6; ++i) pose[i] = 0.0;
+    pose[2] = M_PI;
+    UpdateR();
+  }
+  void SetTopView(const double z = 10.0) {
+    for (int i = 0; i < 6; ++i) pose[i] = 0.0;
+    pose[0] = M_PI / 2;
+    pose[4] = z;
+  }
+  void SetFrontView(const double z = 2.0) {
+    for (int i = 0; i < 6; ++i) pose[i] = 0.0;
+    pose[4] = 0.1;
+    pose[5] = -z;
+  }
+  void UpdateR() {  // Rodrigues' formula.
+    const double* rot = pose;
+    double th = ::sqrt(rot[0] * rot[0] + rot[1] * rot[1] + rot[2] * rot[2]);
+    if (th < 1e-6) {
+      R[1] = R[2] = R[3] = R[5] = R[6] = R[7] = 0.0;
+      R[0] = R[4] = R[8] = 1.0;
+    } else {
+      const double r1 = rot[0] / th, r2 = rot[1] / th, r3 = rot[2] / th;
+      const double a = (th >= M_PI)? -1 : cos(th);
+      const double b = (th >= M_PI)? 0 : sin(th);
+      const double c = 1.0 - a;
+      R[0] =     a + c*r1*r1, R[3] = -b*r3 + c*r2*r1, R[6] =  b*r2 + c*r3*r1;
+      R[1] =  b*r3 + c*r2*r1, R[4] =     a + c*r2*r2, R[7] = -b*r1 + c*r3*r2;
+      R[2] = -b*r2 + c*r3*r1, R[5] =  b*r1 + c*r3*r2, R[8] =     a + c*r3*r3;
+    }
+  }
+  void LookAt(int w, int h, bool update_rot = false) {
+    if (update_rot) UpdateR();
+    const double *e = &pose[3], *u = &R[3], *l = &R[6];
+    gluLookAt(e[0], e[1], e[2], e[0] + l[0], e[1] + l[1], e[2] + l[2],
+              u[0], u[1], u[2]);
+  }
+
+  void LookAt(int w, int h, double depth, bool update_rot = false) {
+    if (update_rot) UpdateR();
+    const double *e = &pose[3], *u = &R[3], *l = &R[6];
+    std::cout << e[0] << "," << e[1] << "," << e[2] << ",";
+    std::cout << e[0] + depth*l[0] << "," <<e[1] + depth*l[1] << "," << e[2] +
+        depth*l[2] << ",";
+    std::cout << u[0] << "," << u[1] << "," << u[2] << std::endl;
+    //gluLookAt(e[0], e[1], e[2], e[0] + depth*l[0], e[1] + depth*l[1], e[2] + depth*l[2], u[0], u[1], u[2]);
+    double eye[3];
+    eye[0] = -(e[0] + depth*l[0]);
+    eye[1] = -(e[1] + depth*l[1]);
+    eye[2] = -(e[2] + depth*l[2]);
+    std::cout << eye[0] << "," << eye[1] << "," << eye[2] << std::endl;
+    gluLookAt(eye[0], eye[1], eye[2], 0, 0, 0, u[0], u[1], u[2]);
+  }
+};
+
 void draw_cameras(void);
 void draw_axes(void);
 void display(void);
@@ -58,6 +121,8 @@ int g_timebase = 0;
 bool g_playback = false;
 bool g_record_start = false;
 bool g_capture = false;
+bool g_motion = false;
+bool g_camfollow = false;
 double g_projection_matrix[16];
 
 #define NUM_CAMERA_PARAMS 9
@@ -98,6 +163,9 @@ std::vector<camera_params_t> cameras;
 std::vector<point_t> points;
 double bundle_version;
 
+// Camera
+GLCam g_cam;
+
 void ReadBundleFile(char *bundle_file,
                     std::vector<camera_params_t> &cameras,
                     std::vector<point_t> &points, double &bundle_version) {
@@ -107,10 +175,12 @@ void ReadBundleFile(char *bundle_file,
     return;
   }
 
+  char *dummy = NULL;
+  int num_reads;
   int num_images, num_points;
 
   char first_line[256];
-  fgets(first_line, 256, f);
+  dummy = fgets(first_line, 256, f);
   if (first_line[0] == '#') {
     double version;
     sscanf(first_line, "# Bundle file v%lf", &version);
@@ -118,14 +188,14 @@ void ReadBundleFile(char *bundle_file,
     bundle_version = version;
     printf("[ReadBundleFile] Bundle version: %0.3f\n", version);
 
-    fscanf(f, "%d %d\n", &num_images, &num_points);
+    num_reads = fscanf(f, "%d %d\n", &num_images, &num_points);
   } else if (first_line[0] == 'v') {
       double version;
       sscanf(first_line, "v%lf", &version);
       bundle_version = version;
       printf("[ReadBundleFile] Bundle version: %0.3f\n", version);
 
-      fscanf(f, "%d %d\n", &num_images, &num_points);
+      num_reads = fscanf(f, "%d %d\n", &num_images, &num_points);
   } else {
       bundle_version = 0.1;
       sscanf(first_line, "%d %d\n", &num_images, &num_points);
@@ -141,16 +211,16 @@ void ReadBundleFile(char *bundle_file,
 
     if (bundle_version < 0.2) {
       /* Focal length */
-      fscanf(f, "%lf\n", &focal_length);
+      num_reads = fscanf(f, "%lf\n", &focal_length);
     } else {
-      fscanf(f, "%lf %lf %lf\n", &focal_length, &k0, &k1);
+      num_reads = fscanf(f, "%lf %lf %lf\n", &focal_length, &k0, &k1);
     }
 
     /* Rotation */
-    fscanf(f, "%lf %lf %lf\n%lf %lf %lf\n%lf %lf %lf\n",
+    num_reads = fscanf(f, "%lf %lf %lf\n%lf %lf %lf\n%lf %lf %lf\n",
            R+0, R+1, R+2, R+3, R+4, R+5, R+6, R+7, R+8);
     /* Translation */
-    fscanf(f, "%lf %lf %lf\n", t+0, t+1, t+2);
+    num_reads = fscanf(f, "%lf %lf %lf\n", t+0, t+1, t+2);
 
     // if (focal_length == 0.0)
     //     continue;
@@ -168,20 +238,20 @@ void ReadBundleFile(char *bundle_file,
   for (int i = 0; i < num_points; i++) {
     point_t pt;
     /* Position */
-    fscanf(f, "%lf %lf %lf\n", pt.pos + 0, pt.pos + 1, pt.pos + 2);
+    num_reads = fscanf(f, "%lf %lf %lf\n", pt.pos + 0, pt.pos + 1, pt.pos + 2);
     /* Color */
-    fscanf(f, "%lf %lf %lf\n", pt.color + 0, pt.color + 1, pt.color + 2);
+    num_reads = fscanf(f, "%lf %lf %lf\n", pt.color + 0, pt.color + 1, pt.color + 2);
 
     int num_visible;
-    fscanf(f, "%d", &num_visible);
+    num_reads = fscanf(f, "%d", &num_visible);
 
     for (int j = 0; j < num_visible; j++) {
       int view, key;
-      fscanf(f, "%d %d", &view, &key);
+      num_reads = fscanf(f, "%d %d", &view, &key);
 
       double x, y;
       if (bundle_version >= 0.3)
-        fscanf(f, "%lf %lf", &x, &y);
+        num_reads = fscanf(f, "%lf %lf", &x, &y);
     }
 
     if (num_visible > 0) {
@@ -216,8 +286,15 @@ int main(int argc, char **argv) {
 
   /* Configure GLUT callback functions */
   load_ply(argv[1], g_points, g_colors, g_faces);
-  glScalef(0.25,0.25,0.25);
-
+  //glScalef(0.25,0.25,0.25);
+  g_cam.LookAt(640,480);
+#if 0
+  glMatrixMode(GL_MODELVIEW);
+  glLoadIdentity();
+  gluLookAt(0, 0, 0,   // Eye
+            0, 0, 1,   // Origin
+            0, -1, 0);  // Upvector, -z.
+#endif
   zprInit();
   zprSelectionFunc(draw_axes);     /* Selection mode draw function */
 
@@ -287,6 +364,69 @@ void idle(void) {
     g_capture = false;
   }
 
+  if (g_camfollow) {
+    int width = glutGet(GLUT_WINDOW_WIDTH );
+    int height = glutGet(GLUT_WINDOW_HEIGHT);
+    vector<char> img;
+    img.resize(width*height*3);
+    int index = 0;
+    for (int i = 1; i < cameras.size(); i++) {
+      const double *tc = cameras[i].t, *rc = cameras[i].R, *tp = cameras[i-1].t;
+      const int N = 50;
+      double t[3];
+      double v = 0;
+      // Interpolated view.
+      for (int k = 0; k < N; k++) {
+        std::cout << i << "/" << cameras.size() << ", k= " << k << "/" << N << "\n";
+        v = (double)k / (double)N;
+        v = 0.5 - cos(-v * M_PI) * 0.5;
+        t[0] = ((tc[0] * v) + (tp[0] * (1 - v)));
+        t[1] = ((tc[1] * v) + (tp[1] * (1 - v)));
+        t[2] = ((tc[2] * v) + (tp[2] * (1 - v)));
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
+        gluLookAt(t[0], t[1], t[2], 0, 0, 3, 0, -1, 0);
+        display();
+        if(width % 4 != 0) glPixelStorei(GL_PACK_ALIGNMENT, width % 2 ? 1 : 2);
+       glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, img.data());
+       char file[512];
+       sprintf(file, "keyview-%06d.png", index++);
+
+        char* buf = img.data();
+          for (int y = 0; y < height / 2; ++y) {
+            char* p0 = &buf[y * width * 3];
+            char* p1 = &buf[(height - 1 - y) * width * 3];
+              for (int i = 0; i < width * 3; ++i, ++p0, ++p1) {
+                char tmp = *p0;
+                *p0 = *p1;
+                *p1 = tmp;
+              }
+          }
+        WriteRGB8ToPNG(img.data(), width, height, width * 3, file);
+      }
+    }
+    g_camfollow = false;
+  }
+
+  if (g_motion) {
+    const float r = 1.f;
+    glTranslatef(0,0,4);
+    for (float i = 0; i < 2*M_PI; i += 0.1) {
+      float x = r * cos(i);
+      float y = r * sin(i);
+      glRotatef(1,0,1,0);
+#if 0
+      glMatrixMode(GL_MODELVIEW);
+      glLoadIdentity();
+      gluLookAt(x, -3, y, 
+                0, 0, 2, 
+                0, -1, 0);
+#endif
+      display();
+    }
+    g_motion = false;
+  }
+
   glutPostRedisplay();
 }
 
@@ -300,22 +440,27 @@ void load_playback(const char *filename,
     exit(1);
   }
 
-  fread((void*)projection_matrix, sizeof(double)*16, 1, fp);
+  size_t reads;
+  reads = fread((void*)projection_matrix, sizeof(double)*16, 1, fp);
 
   while(!feof(fp)) {
     double *m = new double[16];
-    fread((void*)&m[0], sizeof(double)*16, 1, fp);
+    reads = fread((void*)&m[0], sizeof(double)*16, 1, fp);
     g_gl_states.push_back(m);
   }
 
   fclose(fp);
-  printf("Playback images %d\n", g_gl_states.size());
+  printf("Playback images %d\n", (int)g_gl_states.size());
   g_playback = true;
 }
 
 void display(void) {
+
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glEnable(GL_DEPTH_TEST);
+  
+  glPushMatrix();
+
   draw_cameras();
   draw_axes();
 
@@ -372,6 +517,7 @@ void display(void) {
   }
 #endif
 
+  glPopMatrix();
   glutSwapBuffers();
 }
 
@@ -400,12 +546,33 @@ void keyboard(unsigned char key, int x, int y) {
     // Self capture
     g_capture = true;
   } else if (key == 's') {
-    std::cout << "Record started\n";
-    g_record_start = true;
-  } else if (key == 'x') {
-    g_record_start = false;
-    std::cout << "Record paused\n";
+    if (g_record_start == false) {
+      std::cout << "Record started\n";
+      g_record_start = true;
+    } else {
+      std::cout << "Record stopped\n";
+      g_record_start = false;
+    }
+  } else if (key == 'm') {
+    g_motion = true;
+  } else if (key == 'o') {
+    g_camfollow = true;
   }
+
+  const double step_rot = M_PI / 360;
+
+  switch(key) {
+    case 'x': g_cam.pose[0] += step_rot; break;
+    case 'X': g_cam.pose[0] -= step_rot; break;
+    case 'y': g_cam.pose[1] += step_rot; break;
+    case 'Y': g_cam.pose[1] -= step_rot; break;
+    case 'z': g_cam.pose[2] += step_rot; break;
+    case 'Z': g_cam.pose[2] -= step_rot; break;
+  }
+
+  glLoadIdentity();
+  g_cam.LookAt(640,480,true);
+  display();
 }
 
 void draw_cameras(void) {
@@ -495,6 +662,7 @@ void load_ply(const char *filename,
     exit(1);
   }
 
+  char *dummy = NULL;
   char line[1024];
   char dum_s[512];
   int n_vertex;
@@ -503,32 +671,32 @@ void load_ply(const char *filename,
   // WARNING:
   // THIS ASSUMES A VERY STRICT FORMAT FROM MESHLAB!
   // Change this if nothing renders correctly
-  fgets(line, sizeof(line), fp); 
-  fgets(line, sizeof(line), fp);
-  fgets(line, sizeof(line), fp);
+  dummy = fgets(line, sizeof(line), fp); 
+  dummy = fgets(line, sizeof(line), fp);
+  dummy = fgets(line, sizeof(line), fp);
   sscanf(line, "%s %s %d", dum_s, dum_s, &n_face);
-  fgets(line, sizeof(line), fp);
-  fgets(line, sizeof(line), fp);
+  dummy = fgets(line, sizeof(line), fp);
+  dummy = fgets(line, sizeof(line), fp);
   sscanf(line, "%s %s %d", dum_s, dum_s, &n_vertex);
-  fgets(line, sizeof(line), fp);
-  fgets(line, sizeof(line), fp);
-  fgets(line, sizeof(line), fp);
-  fgets(line, sizeof(line), fp);
-  fgets(line, sizeof(line), fp);
-  fgets(line, sizeof(line), fp);
-  fgets(line, sizeof(line), fp);
+  dummy = fgets(line, sizeof(line), fp);
+  dummy = fgets(line, sizeof(line), fp);
+  dummy = fgets(line, sizeof(line), fp);
+  dummy = fgets(line, sizeof(line), fp);
+  dummy = fgets(line, sizeof(line), fp);
+  dummy = fgets(line, sizeof(line), fp);
+  dummy = fgets(line, sizeof(line), fp);
 
   points.resize(n_vertex);
   colors.resize(n_vertex);
   faces.resize(n_face);
 
   for(int i=0; i < n_vertex; i++) {
-    fgets(line, sizeof(line), fp);
+    dummy = fgets(line, sizeof(line), fp);
 
     Point3f pt;
     Color3ub col;
 
-    sscanf(line, "%f %f %f %d %d %d", &pt.x, &pt.y, &pt.z, &col.r, &col.g, &col.b);
+    sscanf(line, "%f %f %f %hhu %hhu %hhu", &pt.x, &pt.y, &pt.z, &col.r, &col.g, &col.b);
 
     points[i] = pt;
     colors[i] = col;
@@ -537,7 +705,7 @@ void load_ply(const char *filename,
   for(int i=0; i < n_face; i++) {
     int dum;
     Face face;
-    fgets(line, sizeof(line), fp);
+    dummy = fgets(line, sizeof(line), fp);
     sscanf(line, "%d %d %d %d", &dum, &face.a, &face.b, &face.c);
     faces[i] = face;
   }
