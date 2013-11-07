@@ -25,12 +25,17 @@
 using namespace std;
 using namespace csio;
 
+const float DEG2RAD = 3.141593f / 180;
+
 #define ENABLE_CONTROL_RECORDING // record key/mouse input for offline rendering into a movie
 
 DEFINE_int32(fps, 25, "Frame per second");
 DEFINE_double(radius, 3.0, "Turn radius");
 DEFINE_double(org_depth, 4.0, "Depth of origin");
 DEFINE_double(y_derotate, -40.0, "y derotate");
+
+DEFINE_double(fov, 90.0, "GL camera field of view");
+DEFINE_string(cam, "", "GL camera parameters (x,y,z,rx,ry,rz).");
 
 // Drawing primitives
 struct Point3f {
@@ -51,9 +56,15 @@ struct GLCam {
   double R[9];  // 3x3 matrix (column major).
   bool ortho;
 
-  GLCam() : fov(60), near_clip(0.1), far_clip(1000.0), ortho(false) {
+  GLCam() : fov(FLAGS_fov), near_clip(-10.0), far_clip(10.0), ortho(true) {
     for (int i = 0; i < 6; ++i) pose[i] = 0.0;
-    pose[2] = M_PI;
+    if (FLAGS_cam.empty()) {
+    //pose[2] = M_PI;
+      pose[5] = 3.0;
+    } else {
+      sscanf(FLAGS_cam.c_str(), "%lf,%lf,%lf,%lf,%lf,%lf",
+                          &pose[3], &pose[4], &pose[5], &pose[0], &pose[1], &pose[2]);
+    }
     UpdateR();
   }
   void SetTopView(const double z = 10.0) {
@@ -84,6 +95,16 @@ struct GLCam {
   }
   void LookAt(int w, int h, bool update_rot = false) {
     if (update_rot) UpdateR();
+    if (ortho == false) {
+      gluPerspective(fov, (float) w / h, near_clip, far_clip);
+    } else {
+      double left = -(double)w/(double)h;
+      double right = -left;
+      glMatrixMode(GL_PROJECTION);
+      glLoadIdentity();
+      glOrtho(left, right, -1.0, 1.0, near_clip, far_clip);
+      glMatrixMode(GL_MODELVIEW);
+    }
     const double *e = &pose[3], *u = &R[3], *l = &R[6];
     gluLookAt(e[0], e[1], e[2], e[0] + l[0], e[1] + l[1], e[2] + l[2],
               u[0], u[1], u[2]);
@@ -106,8 +127,10 @@ struct GLCam {
   }
 };
 
+void drawFrustum(float fovY, float aspectRatio, float nearPlane, float farPlane);
 void draw_cameras(void);
 void draw_axes(void);
+void drawAxis(float size);
 void display(void);
 void idle(void);
 void keyboard(unsigned char key, int x, int y);
@@ -169,6 +192,9 @@ double bundle_version;
 
 // Camera
 GLCam g_cam;
+
+// Color
+int background_color = 0; // black, 1=white
 
 void ReadBundleFile(char *bundle_file,
                     std::vector<camera_params_t> &cameras,
@@ -266,6 +292,118 @@ void ReadBundleFile(char *bundle_file,
   fclose(f);
 }
 
+void drawAxis(float size)
+{
+    glDepthFunc(GL_ALWAYS);     // to avoid visual artifacts with grid lines
+    glPushMatrix();             //NOTE: There is a bug on Mac misbehaviours of
+                                //      the light position when you draw GL_LINES
+                                //      and GL_POINTS. remember the matrix.
+
+    // draw axis
+    glLineWidth(3);
+    glBegin(GL_LINES);
+        glColor3f(1, 0, 0);
+        glVertex3f(0, 0, 0);
+        glVertex3f(size, 0, 0);
+        glColor3f(0, 1, 0);
+        glVertex3f(0, 0, 0);
+        glVertex3f(0, size, 0);
+        glColor3f(0, 0, 1);
+        glVertex3f(0, 0, 0);
+        glVertex3f(0, 0, size);
+    glEnd();
+    glLineWidth(1);
+
+    // draw arrows(actually big square dots)
+    glPointSize(5);
+    glBegin(GL_POINTS);
+        glColor3f(1, 0, 0);
+        glVertex3f(size, 0, 0);
+        glColor3f(0, 1, 0);
+        glVertex3f(0, size, 0);
+        glColor3f(0, 0, 1);
+        glVertex3f(0, 0, size);
+    glEnd();
+    glPointSize(1);
+
+    // restore default settings
+    glPopMatrix();
+    glDepthFunc(GL_LEQUAL);
+}
+
+void drawGrid(float size, float step)
+{
+    glBegin(GL_LINES);
+
+    glColor3f(0.3f, 0.3f, 0.3f);
+    for(float i=step; i <= size; i+= step)
+    {
+        glVertex3f(-size, 0,  i);   // lines parallel to X-axis
+        glVertex3f( size, 0,  i);
+        glVertex3f(-size, 0, -i);   // lines parallel to X-axis
+        glVertex3f( size, 0, -i);
+
+        glVertex3f( i, 0, -size);   // lines parallel to Z-axis
+        glVertex3f( i, 0,  size);
+        glVertex3f(-i, 0, -size);   // lines parallel to Z-axis
+        glVertex3f(-i, 0,  size);
+    }
+
+    // x-axis
+    glColor3f(0.5f, 0, 0);
+    glVertex3f(-size, 0, 0);
+    glVertex3f( size, 0, 0);
+
+    // z-axis
+    glColor3f(0,0,0.5f);
+    glVertex3f(0, 0, -size);
+    glVertex3f(0, 0,  size);
+
+    glEnd();
+}
+
+void initLights()
+{
+    // set up light colors (ambient, diffuse, specular)
+    GLfloat lightKa[] = {0.5f, 0.5f, 0.5f, 0.5f};      // ambient light
+    GLfloat lightKd[] = {.9f, .9f, .9f, 1.0f};      // diffuse light
+    GLfloat lightKs[] = {1, 1, 1, 1};               // specular light
+    glLightfv(GL_LIGHT0, GL_AMBIENT, lightKa);
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, lightKd);
+    glLightfv(GL_LIGHT0, GL_SPECULAR, lightKs);
+
+    // position the light in eye space
+    float lightPos[4] = {-1, 1, 1, 0};               // directional light
+    glLightfv(GL_LIGHT0, GL_POSITION, lightPos);
+
+    glEnable(GL_LIGHT0);                            // MUST enable each light source after configuration
+}
+
+void init() {
+    glShadeModel(GL_SMOOTH);                        // shading mathod: GL_SMOOTH or GL_FLAT
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);          // 4-byte pixel alignment
+
+    // enable/disable features
+    glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
+    //glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+    //glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
+    glEnable(GL_DEPTH_TEST);
+    //glEnable(GL_LIGHTING);
+    glEnable(GL_TEXTURE_2D);
+    glEnable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+    glEnable(GL_SCISSOR_TEST);
+
+     // track material ambient and diffuse from surface color, call it before glEnable(GL_COLOR_MATERIAL)
+    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+    glEnable(GL_COLOR_MATERIAL);
+
+    glClearStencil(0);                              // clear stencil buffer
+    glClearDepth(1.0f);                             // 0 is near, 1 is far
+    glDepthFunc(GL_LEQUAL);
+
+    //initLights();
+}
 
 int main(int argc, char **argv) {
   google::ParseCommandLineFlags(&argc, &argv, true);
@@ -287,24 +425,28 @@ int main(int argc, char **argv) {
   /* Initialise GLUT and create a window */
   glutInit(&argc, argv);
   glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
-  glutInitWindowSize(640, 480);
+  glutInitWindowSize(1024, 768);
   glutCreateWindow("GLT Mouse Zoom-Pan-Rotate");
+
+  init();
 
   /* Configure GLUT callback functions */
   load_ply(argv[1], g_points, g_colors, g_faces);
   //glScalef(0.25,0.25,0.25);
-  g_cam.LookAt(640,480);
-#if 0
+  //g_cam.LookAt(640,480);
   glMatrixMode(GL_MODELVIEW);
   glLoadIdentity();
   gluLookAt(0, 0, 0,   // Eye
             0, 0, 1,   // Origin
             0, -1, 0);  // Upvector, -z.
-#endif
+  glMatrixMode(GL_PROJECTION);
+  glLoadIdentity();
+
+  // Zpr. reshape will be called, and matrix mode set to MODELVIEW.
   zprInit();
   zprSelectionFunc(draw_axes);     /* Selection mode draw function */
 
-  //glClearColor(1.0f, 1.0f, 1.0f, 0.0f); // Background white.
+  // Callback function add.
   glutDisplayFunc(display);
   glutKeyboardFunc(keyboard);
   glutIdleFunc(idle);
@@ -397,8 +539,7 @@ void idle(void) {
 
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
-
-        gluLookAt(t[0], t[1], t[2], 0, 0, 3, -u[0], -u[1], -u[2]);
+        gluLookAt(t[0], t[1], t[2], 0, 0, 0, -u[0], -u[1], -u[2]);
         display();
 
         if(g_save) {
@@ -424,6 +565,43 @@ void idle(void) {
     g_camfollow = false;
   }
 
+  if (g_motion) {
+    int width = glutGet(GLUT_WINDOW_WIDTH );
+    int height = glutGet(GLUT_WINDOW_HEIGHT);
+    vector<char> img;
+    img.resize(width*height*3);
+    int index = 0;
+
+    for (int i = 0; i < 361; ++i) {
+      std::cout << i << "/360\n";
+      glMatrixMode(GL_MODELVIEW);
+      glRotatef(1,0,1,0);
+      display();
+      if(g_save) {
+        if(width % 4 != 0) glPixelStorei(GL_PACK_ALIGNMENT, width % 2 ? 1 : 2);
+        glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, img.data());
+        char file[512];
+        sprintf(file, "keyview-%06d.png", index++);
+
+        char* buf = img.data();
+        for (int y = 0; y < height / 2; ++y) {
+          char* p0 = &buf[y * width * 3];
+          char* p1 = &buf[(height - 1 - y) * width * 3];
+            for (int i = 0; i < width * 3; ++i, ++p0, ++p1) {
+              char tmp = *p0;
+              *p0 = *p1;
+              *p1 = tmp;
+            }
+        }
+        WriteRGB8ToPNG(img.data(), width, height, width * 3, file);
+      } else {
+        std::cout << "Not saving. to save, press s\n";
+      }
+    } 
+    g_motion = false;
+  }
+
+#if 0
   if (g_motion) {
     int width = glutGet(GLUT_WINDOW_WIDTH );
     int height = glutGet(GLUT_WINDOW_HEIGHT);
@@ -467,9 +645,7 @@ void idle(void) {
     }
     g_motion = false;
   }
-
-
-
+#endif
   glutPostRedisplay();
 }
 
@@ -498,14 +674,26 @@ void load_playback(const char *filename,
 }
 
 void display(void) {
+  int width = glutGet(GLUT_WINDOW_WIDTH );
+  int height = glutGet(GLUT_WINDOW_HEIGHT);
 
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  if (background_color == 0) {
+    glClearColor(0.f, 0.f, 0.f, 0.f);
+  } else if (background_color == 1) {
+    glClearColor(1.f, 1.f, 1.f, 0.f);
+  }
+
+  // Automatically assumed MODELVIEW mode.
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
   glEnable(GL_DEPTH_TEST);
-  
-  glPushMatrix();
 
+  drawGrid(10, 1);
+
+  glPushMatrix();
+  g_cam.LookAt(width, height, true);
   draw_cameras();
-  draw_axes();
+  //draw_axes();
+  drawAxis(0.2);
 
   glBegin(GL_TRIANGLES);
   for(unsigned int i=0; i < g_faces.size(); i++) {
@@ -547,7 +735,7 @@ void display(void) {
     if ( (g_time - g_timebase) > (1000 / FLAGS_fps) ) {
       double *m = new double[16];
       glGetDoublev(GL_MODELVIEW_MATRIX, m);
-#if 0
+#if 1
       printf("\n");
       printf("%f %f %f %f\n", m[0], m[1], m[2], m[3]);
       printf("%f %f %f %f\n", m[4], m[5], m[6], m[7]);
@@ -559,8 +747,8 @@ void display(void) {
     }
   }
 #endif
-
   glPopMatrix();
+
   glutSwapBuffers();
 }
 
@@ -588,7 +776,7 @@ void keyboard(unsigned char key, int x, int y) {
   } else if (key == 'c') {
     // Self capture
     g_capture = true;
-  } else if (key == 's') {
+  } else if (key == 'r') {
     if (g_record_start == false) {
       std::cout << "Record started\n";
       g_record_start = true;
@@ -596,18 +784,29 @@ void keyboard(unsigned char key, int x, int y) {
       std::cout << "Record stopped\n";
       g_record_start = false;
     }
-    if (g_save == false)
-      g_save = true;
-    else
-      g_save = false;
   } else if (key == 'm') {
     g_motion = true;
   } else if (key == 'o') {
     g_camfollow = true;
+  } else if (key == 'v') {
+    if (g_save == false)
+      g_save = true;
+    else
+      g_save = false;
+  }
+
+  if (key == '1') {
+    std::cout << "Black " << key <<  "\n";
+    background_color = 0;
+  } 
+  
+  if (key == '2') {
+    std::cout << "White\n";
+    background_color = 1;
   }
 
   const double step_rot = M_PI / 360;
-
+  const double step_tr = 0.2;
   switch(key) {
     case 'x': g_cam.pose[0] += step_rot; break;
     case 'X': g_cam.pose[0] -= step_rot; break;
@@ -615,18 +814,22 @@ void keyboard(unsigned char key, int x, int y) {
     case 'Y': g_cam.pose[1] -= step_rot; break;
     case 'z': g_cam.pose[2] += step_rot; break;
     case 'Z': g_cam.pose[2] -= step_rot; break;
+    case 'd': g_cam.pose[3] -= step_tr; break;
+    case 'a': g_cam.pose[3] += step_tr; break;
+    case 'e': g_cam.pose[4] -= step_tr; break;
+    case 'q': g_cam.pose[4] += step_tr; break;
+    case 's': g_cam.pose[5] -= step_tr; break;
+    case 'w': g_cam.pose[5] += step_tr; break;
   }
 
-  glLoadIdentity();
-  g_cam.LookAt(640,480,true);
-  display();
+  glutPostRedisplay();
 }
 
 void draw_cameras(void) {
   GLfloat m[16];
   for (unsigned int i = 0; i < cameras.size(); ++i) {
     glPushMatrix();
-      const double *t = cameras[i].t, *r = cameras[i].R;
+    const double *t = cameras[i].t, *r = cameras[i].R;
 #define M(row,col)  m[col*4+row]
     M(0, 0) = r[0]; M(0, 1) = r[1]; M(0, 2) = r[2]; M(0, 3) = 0.0;
     M(1, 0) = r[3]; M(1, 1) = r[4]; M(1, 2) = r[5]; M(1, 3) = 0.0;
@@ -635,6 +838,14 @@ void draw_cameras(void) {
 #undef M
       glTranslatef(t[0], t[1], t[2]);
       glMultMatrixf(m);
+      //glPushMatrix();
+      //glScalef(0.1,0.1,0.1);
+      //glRotatef(180,1,0,0);
+      //drawCamera();
+      //glPopMatrix();
+      drawFrustum(FLAGS_fov, 1.0, -0.01, -0.05);
+      drawAxis(0.1);
+#if 0
       glColor3f(0.3, 0.3, 0.3);
       glutSolidSphere(0.01, 20, 20); 
         glPushMatrix();
@@ -655,9 +866,96 @@ void draw_cameras(void) {
           glPushName(3);
             glutSolidCone(0.01, 0.1, 20, 20);
           glPopName();
+#endif
     glPopMatrix();
   }
 }
+
+void drawFrustum(float fovY, float aspectRatio, float nearPlane, float farPlane)
+{
+    float tangent = tanf(fovY/2 * DEG2RAD);
+    float nearHeight = nearPlane * tangent;
+    float nearWidth = nearHeight * aspectRatio;
+    float farHeight = farPlane * tangent;
+    float farWidth = farHeight * aspectRatio;
+
+    // compute 8 vertices of the frustum
+    float vertices[8][3];
+    // near top right
+    vertices[0][0] = nearWidth;     vertices[0][1] = nearHeight;    vertices[0][2] = -nearPlane;
+    // near top left
+    vertices[1][0] = -nearWidth;    vertices[1][1] = nearHeight;    vertices[1][2] = -nearPlane;
+    // near bottom left
+    vertices[2][0] = -nearWidth;    vertices[2][1] = -nearHeight;   vertices[2][2] = -nearPlane;
+    // near bottom right
+    vertices[3][0] = nearWidth;     vertices[3][1] = -nearHeight;   vertices[3][2] = -nearPlane;
+    // far top right
+    vertices[4][0] = farWidth;      vertices[4][1] = farHeight;     vertices[4][2] = -farPlane;
+    // far top left
+    vertices[5][0] = -farWidth;     vertices[5][1] = farHeight;     vertices[5][2] = -farPlane;
+    // far bottom left
+    vertices[6][0] = -farWidth;     vertices[6][1] = -farHeight;    vertices[6][2] = -farPlane;
+    // far bottom right
+    vertices[7][0] = farWidth;      vertices[7][1] = -farHeight;    vertices[7][2] = -farPlane;
+
+    float colorLine1[4] = { 0.7f, 0.7f, 0.7f, 0.7f };
+    float colorLine2[4] = { 0.2f, 0.2f, 0.2f, 0.7f };
+    float colorPlane[4] = { 0.5f, 0.5f, 0.5f, 0.5f };
+
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    // draw the edges around frustum
+    glBegin(GL_LINES);
+    glColor4fv(colorLine2);
+    glVertex3f(0, 0, 0);
+    glColor4fv(colorLine1);
+    glVertex3fv(vertices[4]);
+
+    glColor4fv(colorLine2);
+    glVertex3f(0, 0, 0);
+    glColor4fv(colorLine1);
+    glVertex3fv(vertices[5]);
+
+    glColor4fv(colorLine2);
+    glVertex3f(0, 0, 0);
+    glColor4fv(colorLine1);
+    glVertex3fv(vertices[6]);
+
+    glColor4fv(colorLine2);
+    glVertex3f(0, 0, 0);
+    glColor4fv(colorLine1);
+    glVertex3fv(vertices[7]);
+    glEnd();
+
+    glColor4fv(colorLine1);
+    glBegin(GL_LINE_LOOP);
+    glVertex3fv(vertices[4]);
+    glVertex3fv(vertices[5]);
+    glVertex3fv(vertices[6]);
+    glVertex3fv(vertices[7]);
+    glEnd();
+
+    glColor4fv(colorLine1);
+    glBegin(GL_LINE_LOOP);
+    glVertex3fv(vertices[0]);
+    glVertex3fv(vertices[1]);
+    glVertex3fv(vertices[2]);
+    glVertex3fv(vertices[3]);
+    glEnd();
+
+    // draw near and far plane
+    glColor4fv(colorPlane);
+    glBegin(GL_QUADS);
+    glVertex3fv(vertices[0]);
+    glVertex3fv(vertices[1]);
+    glVertex3fv(vertices[2]);
+    glVertex3fv(vertices[3]);
+    glVertex3fv(vertices[4]);
+    glVertex3fv(vertices[5]);
+    glVertex3fv(vertices[6]);
+    glVertex3fv(vertices[7]);
+    glEnd();
+} 
 
 void draw_axes(void) {
   /* Name-stack manipulation for the purpose of

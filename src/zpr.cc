@@ -1,4 +1,4 @@
-
+#include <iostream>
 #include <stdlib.h>
 #include <stdio.h>
 #include <memory.h>
@@ -48,7 +48,7 @@ static void zprPick(GLdouble x, GLdouble y,GLdouble delX, GLdouble delY);
 GLfloat zprReferencePoint[4] = { 0,0,0,0 };
 
 void zprInit() {
-  getMatrix();
+  getMatrix(); // getModelview Matrix.
   glutReshapeFunc(zprReshape);
   glutMouseFunc(zprMouse);
   glutMotionFunc(zprMotion);
@@ -67,6 +67,7 @@ static void zprReshape(int w,int h) {
   glOrtho(_left,_right,_bottom,_top,_zNear,_zFar);
 
   glMatrixMode(GL_MODELVIEW);
+  std::cout << "zprReshape(" << w << "," << h <<  ")\n";
 }
 
 static void zprMouse(int button, int state, int x, int y) {
