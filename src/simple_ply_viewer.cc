@@ -28,6 +28,9 @@ using namespace csio;
 #define ENABLE_CONTROL_RECORDING // record key/mouse input for offline rendering into a movie
 
 DEFINE_int32(fps, 25, "Frame per second");
+DEFINE_double(radius, 3.0, "Turn radius");
+DEFINE_double(org_depth, 4.0, "Depth of origin");
+DEFINE_double(y_derotate, -40.0, "y derotate");
 
 // Drawing primitives
 struct Point3f {
@@ -265,6 +268,8 @@ void ReadBundleFile(char *bundle_file,
 
 
 int main(int argc, char **argv) {
+  google::ParseCommandLineFlags(&argc, &argv, true);
+
   if(argc < 3) {
     printf("./simple_ply_viewer model.ply bundle.out [playback.bin]\n");
     return 0;
@@ -420,23 +425,50 @@ void idle(void) {
   }
 
   if (g_motion) {
-    const float r = 1.f;
-    glTranslatef(0,0,4);
-    for (float i = 0; i < 2*M_PI; i += 0.1) {
-      float x = r * cos(i);
-      float y = r * sin(i);
-      glRotatef(1,0,1,0);
-#if 0
+    int width = glutGet(GLUT_WINDOW_WIDTH );
+    int height = glutGet(GLUT_WINDOW_HEIGHT);
+    vector<char> img;
+    img.resize(width*height*3);
+    int index = 0;
+    const double r = FLAGS_radius;
+    const double th = FLAGS_y_derotate * M_PI / 180.0;
+    // Interpolated view.
+    for (double k = 0; k < 2*M_PI; k+= M_PI/180) {
+      double z = r * (1.0 - cos(k));
+      double x = r * sin(k);
       glMatrixMode(GL_MODELVIEW);
       glLoadIdentity();
-      gluLookAt(x, -3, y, 
-                0, 0, 2, 
-                0, -1, 0);
-#endif
+      double a = cos(th) * x;
+      double b = -sin(th) * x;
+      std::cout << a << ", " << b << "\n";
+      gluLookAt(x, z*sin(th), z*cos(th), 0, 0, FLAGS_org_depth, 0, -cos(th), sin(th));
       display();
+
+      if(g_save) {
+        if(width % 4 != 0) glPixelStorei(GL_PACK_ALIGNMENT, width % 2 ? 1 : 2);
+        glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, img.data());
+        char file[512];
+        sprintf(file, "keyview-%06d.png", index++);
+
+        char* buf = img.data();
+        for (int y = 0; y < height / 2; ++y) {
+          char* p0 = &buf[y * width * 3];
+          char* p1 = &buf[(height - 1 - y) * width * 3];
+            for (int i = 0; i < width * 3; ++i, ++p0, ++p1) {
+              char tmp = *p0;
+              *p0 = *p1;
+              *p1 = tmp;
+            }
+        }
+        WriteRGB8ToPNG(img.data(), width, height, width * 3, file);
+      } else {
+        std::cout << "Not saving. to save, press s\n";
+      }
     }
     g_motion = false;
   }
+
+
 
   glutPostRedisplay();
 }
