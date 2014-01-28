@@ -47,7 +47,11 @@ find_path(FREENECT_INCLUDE NAMES libfreenect/libfreenect.h
 message("-- Check for GLUT (optional)")
 if (APPLE)
   add_definitions(-DAPPLE)
-  set(CMAKE_EXE_LINKER_FLAGS "-framework OpenGL -framework GLUT")
+# As Apple default GLUT doesn't support scroll event, we'll use FreeGLUT
+# instead. You can enable this statement, if you have some trouble with it.
+#  set(CMAKE_EXE_LINKER_FLAGS "-framework OpenGL -framework GLUT")
+  set(CMAKE_EXE_LINKER_FLAGS "-framework OpenGL")
+  find_package(FREEGLUT REQUIRED)
 else (APPLE)  # Linux, not so much
   find_package(OpenGL REQUIRED)
   find_package(FREEGLUT REQUIRED)
@@ -85,3 +89,5 @@ target_link_libraries(csio_glviewer ${GOOGLE_LIBRARIES} ${PNG_LIBRARY} ${OPENGL_
 add_executable(spm2csio src/spm2csio.cc)
 target_link_libraries(spm2csio ${GOOGLE_LIBRARIES} ${PNG_LIBRARY})
 
+add_executable(simple_ply_viewer src/simple_ply_viewer.cc src/zpr.cc src/image_file.cc)
+target_link_libraries(simple_ply_viewer ${GOOGLE_LIBRARIES} ${PNG_LIBRARY} ${OPENGL_LIBRARIES} ${FREEGLUT_LIBRARY})
