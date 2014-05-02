@@ -1,4 +1,8 @@
-# project
+#
+# CSIO : The C Standard I/O Library for Computer Vision Research
+#
+# Author : Jongwoo Lim, Hyon Lim
+#
 cmake_minimum_required(VERSION 2.6)
 project(csio)
 
@@ -50,9 +54,16 @@ if (APPLE)
   add_definitions(-DAPPLE)
   set(CMAKE_EXE_LINKER_FLAGS "-framework OpenGL -framework GLUT")
 else (APPLE)  # Linux, not so much
+  message(" -- Linux Detected")
   find_package(OpenGL REQUIRED)
   find_package(GLUT REQUIRED)
   include_directories(${OPENGL_INCLUDE_DIRS} ${GLUT_INCLUDE_DIRS})
+  link_directories(${OpenGL_LIBRARY_DIRS})
+  if(NOT OPENGL_FOUND)
+    message(ERROR "OpenGL not found!")
+  else(NOT OPENGL_FOUND)
+    message("OpenGL found.")
+  endif(NOT OPENGL_FOUND)
 endif (APPLE)
 
 # directories
@@ -80,7 +91,12 @@ endif (FREENECT_LIB)
 
 add_executable(csio_glviewer
     src/csio_glviewer.cc src/csio_glviewer_view.cc src/image_file.cc)
-target_link_libraries(csio_glviewer ${GOOGLE_LIBRARIES} ${PNG_LIBRARY})
+
+if (APPLE)
+  target_link_libraries(csio_glviewer ${GOOGLE_LIBRARIES} ${PNG_LIBRARY})
+else (APPLE)
+  target_link_libraries(csio_glviewer ${GOOGLE_LIBRARIES} ${PNG_LIBRARY} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY})
+endif (APPLE)
 
 add_executable(spm2csio src/spm2csio.cc)
 target_link_libraries(spm2csio ${GOOGLE_LIBRARIES} ${PNG_LIBRARY})
