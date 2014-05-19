@@ -50,6 +50,7 @@ find_path(FREENECT_INCLUDE NAMES libfreenect/libfreenect.h
 
 message("-- Check for GLUT (optional)")
 if (APPLE)
+  message(" -- Apple detected")
   add_definitions(-DAPPLE)
 # As Apple default GLUT doesn't support scroll event, we'll use FreeGLUT
 # instead. You can enable this statement, if you have some trouble with it.
@@ -105,9 +106,9 @@ add_executable(csio_glviewer
     src/csio_glviewer.cc src/csio_glviewer_view.cc src/image_file.cc)
 
 if (APPLE)
-  target_link_libraries(csio_glviewer ${GOOGLE_LIBRARIES} ${PNG_LIBRARY})
+target_link_libraries(csio_glviewer ${GOOGLE_LIBRARIES} ${PNG_LIBRARY} ${FREEGLUT_LIBRARY})
 else (APPLE)
-  target_link_libraries(csio_glviewer ${GOOGLE_LIBRARIES} ${PNG_LIBRARY} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY})
+target_link_libraries(csio_glviewer ${GOOGLE_LIBRARIES} ${PNG_LIBRARY} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY})
 endif (APPLE)
 
 add_executable(spm2csio src/spm2csio.cc)
