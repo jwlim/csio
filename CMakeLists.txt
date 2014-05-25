@@ -91,6 +91,9 @@ include_directories(${GTEST_INCLUDE_DIRS})
 if (APPLE)
   message("libusb added for libfreenect")
   include_directories(/usr/local/include/libusb-1.0)
+else (APPLE)
+  message("libusb added for libfreenect")
+  include_directories(/usr/include/libusb-1.0)
 endif (APPLE)
 
 # use sse3 instruction set
