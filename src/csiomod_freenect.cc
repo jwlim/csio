@@ -136,8 +136,10 @@ int main(int argc, char** argv){
     return -1;
   }
 
+  device.setDepthFormat(FREENECT_DEPTH_REGISTERED);
   device.startVideo();
   device.startDepth();
+
   bool die(false);
 
   uint8_t *rgb = new uint8_t[640*480*3];
