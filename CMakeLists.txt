@@ -54,9 +54,8 @@ if (APPLE)
   add_definitions(-DAPPLE)
 # As Apple default GLUT doesn't support scroll event, we'll use FreeGLUT
 # instead. You can enable this statement, if you have some trouble with it.
-#  set(CMAKE_EXE_LINKER_FLAGS "-framework OpenGL -framework GLUT")
-  set(CMAKE_EXE_LINKER_FLAGS "-framework OpenGL")
-  find_package(FREEGLUT REQUIRED)
+  set(CMAKE_EXE_LINKER_FLAGS "-framework OpenGL -framework GLUT")
+#  find_package(FREEGLUT REQUIRED)
 else (APPLE)  # Linux, not so much
   message(" -- Linux Detected")
   find_package(OpenGL REQUIRED)
@@ -114,7 +113,7 @@ add_executable(csio_glviewer
     src/csio_glviewer.cc src/csio_glviewer_view.cc src/image_file.cc)
 
 if (APPLE)
-target_link_libraries(csio_glviewer ${GOOGLE_LIBRARIES} ${PNG_LIBRARY} ${FREEGLUT_LIBRARY})
+target_link_libraries(csio_glviewer ${GOOGLE_LIBRARIES} ${PNG_LIBRARY})
 else (APPLE)
 target_link_libraries(csio_glviewer ${GOOGLE_LIBRARIES} ${PNG_LIBRARY} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY})
 endif (APPLE)
@@ -125,7 +124,7 @@ target_link_libraries(spm2csio ${GOOGLE_LIBRARIES} ${PNG_LIBRARY})
 add_executable(simple_ply_viewer src/simple_ply_viewer.cc src/zpr.cc src/image_file.cc)
 
 if (APPLE)
-target_link_libraries(simple_ply_viewer ${GOOGLE_LIBRARIES} ${PNG_LIBRARY} ${OPENGL_LIBRARIES} ${FREEGLUT_LIBRARY})
+target_link_libraries(simple_ply_viewer ${GOOGLE_LIBRARIES} ${PNG_LIBRARY} ${OPENGL_LIBRARIES})
 else (APPLE)
 target_link_libraries(simple_ply_viewer ${GOOGLE_LIBRARIES} ${PNG_LIBRARY} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY})
 endif (APPLE)
