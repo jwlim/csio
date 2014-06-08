@@ -18,6 +18,15 @@
 
 namespace csio {
 
+inline std::string FormatStr(const std::string fmt, ...) {
+  char buf[1024];
+  va_list a;
+  va_start(a, fmt);
+  vsprintf(buf, fmt.c_str(), a);
+  va_end(a);
+  return std::string(buf);
+}
+
 inline bool Contains(const std::string& str, const std::string& substr) {
   return (str.find(substr) != std::string::npos);
 }
