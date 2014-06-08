@@ -131,6 +131,7 @@ void ViewerApp::UpdateLayout() {
     w = max(w, view->width());
   }
   LOG(INFO) << "UpdateLayout: " << views.size() << ", " << w << "x" << h;
+  // TODO: Function <glutReshapeWindow> called with no current window defined.
   //glutReshapeWindow(w, h);
 }
 
@@ -321,6 +322,7 @@ int main(int argc, char** argv) {
   glutSpecialFunc(&HandleSpecialKeyInput);
   glutMouseFunc(&HandleMouseInput);
   glutMotionFunc(&HandleMouseMotion);
+
   if (FLAGS_pause) {
     CheckCSIOForDrawing();  // Call once.
   } else {

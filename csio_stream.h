@@ -10,6 +10,7 @@
 #ifndef _CSIO_STREAM_H_
 #define _CSIO_STREAM_H_
 
+#include <stdlib.h>
 #include <fstream>
 #include <iostream>
 #include <map>

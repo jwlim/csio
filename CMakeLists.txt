@@ -1,4 +1,8 @@
-# project
+#
+# CSIO : The C Standard I/O Library for Computer Vision Research
+#
+# Author : Jongwoo Lim, Hyon Lim
+#
 cmake_minimum_required(VERSION 2.6)
 project(csio)
 
@@ -49,12 +53,31 @@ find_library(DC1394_LIB NAMES dc1394 PATHS ${SEARCH_LIBS})
 
 message("-- Check for GLUT (optional)")
 if (APPLE)
+  message(" -- Apple detected")
   add_definitions(-DAPPLE)
+# As Apple default GLUT doesn't support scroll event, we'll use FreeGLUT
+# instead. You can enable this statement, if you have some trouble with it.
   set(CMAKE_EXE_LINKER_FLAGS "-framework OpenGL -framework GLUT")
+#  find_package(FREEGLUT REQUIRED)
 else (APPLE)  # Linux, not so much
+  message(" -- Linux Detected")
   find_package(OpenGL REQUIRED)
-  find_package(FREEGLUT REQUIRED)
-  include_directories(${OPENGL_INCLUDE_DIRS} ${FREEGLUT_INCLUDE_DIRS})
+  find_package(GLUT REQUIRED)
+  include_directories(${OPENGL_INCLUDE_DIRS} ${GLUT_INCLUDE_DIRS})
+  link_directories(${OpenGL_LIBRARY_DIRS} ${GLUT_INCLUDE_DIRS})
+  add_definitions(${GLUT_DEFINITIONS})
+  
+  if(NOT OPENGL_FOUND)
+    message(ERROR "    -- OpenGL not found!")
+  else(NOT OPENGL_FOUND)
+    message("    -- OpenGL found.")
+  endif(NOT OPENGL_FOUND)
+
+  if(NOT GLUT_FOUND)
+    message(ERROR "    -- GLUT not found")
+  else(NOT GLUT_FOUND)
+    message("    -- GLUT found")
+  endif(NOT GLUT_FOUND)
 endif (APPLE)
 
 # directories
@@ -66,6 +89,14 @@ include_directories(${PNG_INCLUDE_DIRS})
 include_directories(${GLOG_INCLUDE})
 include_directories(${GFLAGS_INCLUDE})
 include_directories(${GTEST_INCLUDE_DIRS})
+
+if (APPLE)
+  message("libusb added for libfreenect")
+  include_directories(/usr/local/include/libusb-1.0)
+else (APPLE)
+  message("libusb added for libfreenect")
+  include_directories(/usr/include/libusb-1.0)
+endif (APPLE)
 
 # use sse3 instruction set
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -msse3")  # -DNDEBUG
@@ -86,8 +117,20 @@ endif (FREENECT_LIB)
 
 add_executable(csio_glviewer
     src/csio_glviewer.cc src/csio_glviewer_view.cc src/image_file.cc)
-target_link_libraries(csio_glviewer ${GOOGLE_LIBRARIES} ${PNG_LIBRARY} ${OPENGL_LIBRARIES})
+
+if (APPLE)
+target_link_libraries(csio_glviewer ${GOOGLE_LIBRARIES} ${PNG_LIBRARY})
+else (APPLE)
+target_link_libraries(csio_glviewer ${GOOGLE_LIBRARIES} ${PNG_LIBRARY} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY})
+endif (APPLE)
 
 add_executable(spm2csio src/spm2csio.cc)
 target_link_libraries(spm2csio ${GOOGLE_LIBRARIES} ${PNG_LIBRARY})
 
+add_executable(simple_ply_viewer src/simple_ply_viewer.cc src/zpr.cc src/image_file.cc)
+
+if (APPLE)
+target_link_libraries(simple_ply_viewer ${GOOGLE_LIBRARIES} ${PNG_LIBRARY} ${OPENGL_LIBRARIES})
+else (APPLE)
+target_link_libraries(simple_ply_viewer ${GOOGLE_LIBRARIES} ${PNG_LIBRARY} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY})
+endif (APPLE)
