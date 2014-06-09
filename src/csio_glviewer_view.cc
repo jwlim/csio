@@ -491,7 +491,7 @@ bool View3D::HandleKey(int key, int special, int x, int y) {
   if (!IsInside(x, y)) return false;
   const double step_tr = 0.2;
   const double step_rot = M_PI / 36;
-  LOG(INFO) << "HandleKey: " << key;
+  VLOG(1) << "HandleKey: " << key;
   switch (key) {
     case 'a':  cam_.pose[3] += step_tr;  break;
     case 'd':  cam_.pose[3] -= step_tr;  break;
@@ -515,7 +515,7 @@ bool View3D::HandleKey(int key, int special, int x, int y) {
     case '-':  point_scaler -= 0.1; break;
     default:  return false;
   }
-  LOG(INFO) << setfill(' ') << "Camera: "
+  VLOG(1) << setfill(' ') << "Camera: "
       << cam_.pose[3] << "," << cam_.pose[4] << "," << cam_.pose[5] << ","
       << cam_.pose[0] << "," << cam_.pose[1] << "," << cam_.pose[2];
   cam_.UpdateR();
@@ -551,7 +551,7 @@ bool View3D::HandleMouse(int button, int state, int x, int y) {
       }
       last_x = x; last_y = y;
     }
-    LOG(INFO) << setfill(' ') << "Camera: "
+    VLOG(1) << setfill(' ') << "Camera: "
       << cam_.pose[3] << "," << cam_.pose[4] << "," << cam_.pose[5] << ","
       << cam_.pose[0] << "," << cam_.pose[1] << "," << cam_.pose[2];
     cam_.UpdateR();

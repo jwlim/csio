@@ -280,7 +280,7 @@ void HandleMouseInput(int button, int state, int x, int y) {
   for (int i = 0; i < the_viewer.views.size(); ++i) {
     if (the_viewer.views[i]->HandleMouse(button, state, x, h - y + 1)) return;
   }
-  LOG(INFO) << "Mouse: " << button << ", " << state << ", " << x << ", " << y;
+  VLOG(1) << "Mouse: " << button << ", " << state << ", " << x << ", " << y;
 }
 
 void HandleMouseMotion(int x, int y) {
@@ -288,7 +288,7 @@ void HandleMouseMotion(int x, int y) {
   for (int i = 0; i < the_viewer.views.size(); ++i) {
     if (the_viewer.views[i]->HandleMouse(-1, -1, x, h - y + 1)) return;
   }
-  LOG(INFO) << "Motion: " << x << ", " << y;
+  VLOG(1) << "Motion: " << x << ", " << y;
 }
 
 int main(int argc, char** argv) {

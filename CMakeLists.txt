@@ -45,11 +45,7 @@ find_package(PNG)
 
 message("-- Check for libfreenect (optional)")
 find_library(FREENECT_LIB NAMES freenect PATHS ${SEARCH_LIBS})
-find_path(FREENECT_INCLUDE NAMES libfreenect/libfreenect.h
-          PATHS ${SEARCH_HEADERS})
-
-message("-- Check for libdc1394 (optional)")
-find_library(DC1394_LIB NAMES dc1394 PATHS ${SEARCH_LIBS})
+find_path(FREENECT_INCLUDE NAMES libfreenect.h PATHS ${SEARCH_HEADERS})
 
 message("-- Check for GLUT (optional)")
 if (APPLE)
@@ -102,18 +98,17 @@ endif (APPLE)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -msse3")  # -DNDEBUG
 
 add_executable(csio_test src/csio_test.cc)
-target_link_libraries(csio_test ${GOOGLE_LIBRARIES} ${GTEST_LIBS})
+target_link_libraries(csio_test ${GOOGLE_LIBRARIES} ${GTEST_LIBS} -lpthread)
 add_test(csio_test csio_test)
 add_dependencies(csio_test googletest)
 
 if (FREENECT_LIB)
+  message(" -- Found Freenct path ${FREENECT_INCLUDE}")
+  message(" -- Found Freenct libpath ${FREENECT_LIB}")
   include_directories(${FREENECT_INCLUDE})
   add_executable(csiomod_freenect src/csiomod_freenect.cc)
-  target_link_libraries(csiomod_freenect ${FREENECT_LIB} ${GOOGLE_LIBRARIES})
+  target_link_libraries(csiomod_freenect ${FREENECT_LIB} ${GOOGLE_LIBRARIES} -lpthread)
 endif (FREENECT_LIB)
-
-#add_executable(csiomod_1394 src/csiomod_1394.cc)
-#target_link_libraries(csiomod_1394 ${DC1394_LIB} ${GOOGLE_LIBRARIES})
 
 add_executable(csio_glviewer
     src/csio_glviewer.cc src/csio_glviewer_view.cc src/image_file.cc)

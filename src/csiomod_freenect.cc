@@ -14,7 +14,11 @@
 #include <pthread.h>
 #include <cmath>
 
+#ifdef APPLE
 #include "libfreenect/libfreenect.hpp"
+#else
+#include <libfreenect.hpp>
+#endif
 
 using namespace std;
 
