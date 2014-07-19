@@ -125,7 +125,7 @@ struct GeometricObject {
     return reinterpret_cast<float*>(node_ptr(node_idx) + 4);
   }
   void set_point(int node_idx, int pt_idx, float x, float y, float z) {
-    float* buf = pts(node_idx) + pt_idx * sizeof(float) * 3;
+    float* buf = pts(node_idx) + pt_idx * 3;
     buf[0] = x, buf[1] = y, buf[2] = z;
   }
 };
