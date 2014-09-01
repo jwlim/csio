@@ -45,7 +45,7 @@ find_package(PNG)
 
 message("-- Check for libfreenect (optional)")
 find_library(FREENECT_LIB NAMES freenect PATHS ${SEARCH_LIBS})
-find_path(FREENECT_INCLUDE NAMES libfreenect.h PATHS ${SEARCH_HEADERS})
+find_path(FREENECT_INCLUDE NAMES libfreenect/libfreenect.h PATHS ${SEARCH_HEADERS})
 
 message("-- Check for GLUT (optional)")
 if (APPLE)
