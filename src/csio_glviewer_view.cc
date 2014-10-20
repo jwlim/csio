@@ -250,6 +250,14 @@ void ViewImage::UpdateBuffer(const csio::Frame* frame_ptr) {
   CHECK_NOTNULL(frame_ptr);
   if (pixel_type_ == "rgb8") {
     memcpy(rgb_buf_.data(), frame_ptr->buf.data(), frame_ptr->buf.size());
+  } else if (pixel_type_ == "gray8") {
+    // Do conversion
+    const uint8_t* pixel_buf = reinterpret_cast<const
+        uint8_t*>(frame_ptr->buf.data());
+    uint8_t* rgb_buf = reinterpret_cast<uint8_t*>(rgb_buf_.data());
+    for (int i = 0, j = 0; i < frame_ptr->buf.size(); ++i, j += 3) {
+      rgb_buf[j] = rgb_buf[j+1] = rgb_buf[j+2] = pixel_buf[i];
+    }
   } else if (pixel_type_ == "gray16") {
     const int n = frame_ptr->buf.size() / 2;
     const uint16_t* depth_buf =
