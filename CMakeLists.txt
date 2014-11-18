@@ -23,6 +23,7 @@ LIST(APPEND SEARCH_LIBS /opt/local/lib)
 
 LIST(APPEND SEARCH_HEADERS /usr/include)
 LIST(APPEND SEARCH_HEADERS /usr/local/include)
+LIST(APPEND SEARCH_HEADERS /usr/local/include/libfreenect)
 LIST(APPEND SEARCH_HEADERS /opt/local/include)
 
 # Google libraries
@@ -45,7 +46,7 @@ find_package(PNG)
 
 message("-- Check for libfreenect (optional)")
 find_library(FREENECT_LIB NAMES freenect PATHS ${SEARCH_LIBS})
-find_path(FREENECT_INCLUDE NAMES libfreenect/libfreenect.h PATHS ${SEARCH_HEADERS})
+find_path(FREENECT_INCLUDE NAMES libfreenect.hpp PATHS ${SEARCH_HEADERS})
 
 message("-- Check for GLUT (optional)")
 if (APPLE)
@@ -59,8 +60,8 @@ else (APPLE)  # Linux, not so much
   message(" -- Linux Detected")
   find_package(OpenGL REQUIRED)
   find_package(GLUT REQUIRED)
-  include_directories(${OPENGL_INCLUDE_DIRS} ${GLUT_INCLUDE_DIRS})
-  link_directories(${OpenGL_LIBRARY_DIRS} ${GLUT_INCLUDE_DIRS})
+  include_directories(${OPENGL_INCLUDE_DIR} ${GLUT_INCLUDE_DIR})
+#  link_directories(${OPENGL_LIBRARIES} ${GLUT_LIBRARY})
   add_definitions(${GLUT_DEFINITIONS})
   
   if(NOT OPENGL_FOUND)
@@ -105,9 +106,12 @@ add_dependencies(csio_test googletest)
 if (FREENECT_LIB)
   message(" -- Found Freenct path ${FREENECT_INCLUDE}")
   message(" -- Found Freenct libpath ${FREENECT_LIB}")
-  include_directories(${FREENECT_INCLUDE})
+  find_package(Threads REQUIRED)
+  include_directories(${FREENECT_INCLUDE} ${USB_INCLUDE_DIRS})
   add_executable(csiomod_freenect src/csiomod_freenect.cc)
-  target_link_libraries(csiomod_freenect ${FREENECT_LIB} ${GOOGLE_LIBRARIES} -lpthread)
+  target_link_libraries(csiomod_freenect ${FREENECT_LIB} ${GOOGLE_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+  add_executable(csio_freenect_cppview src/csio_freenect_cppview.cc)
+  target_link_libraries(csio_freenect_cppview ${FREENECT_LIB} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY})
 endif (FREENECT_LIB)
 
 add_executable(csio_glviewer
