@@ -61,8 +61,7 @@ private:
 class FreenectWrapper : public Freenect::FreenectDevice {
  public:
   FreenectWrapper(freenect_context *_ctx, int _index)
-      : Freenect::FreenectDevice(_ctx, _index), m_buffer_depth(FREENECT_DEPTH_11BIT),
-      m_buffer_rgb(FREENECT_VIDEO_RGB), m_gamma(2048), m_new_rgb_frame(false),
+      : Freenect::FreenectDevice(_ctx, _index), m_buffer_depth(640*480), m_buffer_video(freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB).bytes), m_gamma(2048), m_new_rgb_frame(false),
       m_new_depth_frame(false) {
       
       for( unsigned int i = 0 ; i < 2048 ; i++) {
@@ -70,68 +69,52 @@ class FreenectWrapper : public Freenect::FreenectDevice {
         v = std::pow(v, 3)* 6;
         m_gamma[i] = v*6*256;
       }
-
-      m_rgb_data = new uint8_t[640*480*3];
-      m_depth_data = new uint16_t[640*480];
   }
 
   // Do not call directly even in child
   void VideoCallback(void* _rgb, uint32_t timestamp) {
     Mutex::ScopedLock lock(m_rgb_mutex);
-    VLOG(1) << "In video callback";
-    rgb = static_cast<uint8_t*>(_rgb);
+    VLOG(1) << "In video callback. " << getVideoBufferSize();
+    uint8_t* rgb = static_cast<uint8_t*>(_rgb);
+    std::copy(rgb, rgb + getVideoBufferSize(), m_buffer_video.begin());
     m_new_rgb_frame = true;
   }
     
   // Do not call directly even in child
   void DepthCallback(void* _depth, uint32_t timestamp) {
     Mutex::ScopedLock lock(m_depth_mutex);
-    VLOG(1) << "In depth callback";
-    depth = static_cast<uint8_t*>(_depth);
-    //depth = (uint8_t*)static_cast<uint16_t*>(_depth);
+    VLOG(1) << "In depth callback. " << getDepthBufferSize();
+    uint16_t* depth = static_cast<uint16_t*>(_depth);
+    std::copy(depth, depth + getDepthBufferSize()/2, m_buffer_depth.begin());
     m_new_depth_frame = true;
   }
     
-  bool getVideo(uint8_t* output) {
-    m_rgb_mutex.lock();
-    if(m_new_rgb_frame) {
-      memcpy(output, rgb, 640*480*3);
-      m_new_rgb_frame = false;
-      m_rgb_mutex.unlock();
-      return true;
-    } else {
-      m_rgb_mutex.unlock();
+  bool getRGB(std::vector<uint8_t> &buffer) {
+    Mutex::ScopedLock lock(m_rgb_mutex);
+    if(!m_new_rgb_frame)
       return false;
-    }
+    buffer.swap(m_buffer_video);
+    m_new_rgb_frame = false;
+    return true;
   }
     
-  bool getDepth(uint8_t* output) {
-    m_depth_mutex.lock();
-    if(m_new_depth_frame) {
-      memcpy(output, depth, 640*480*2);
-      m_new_depth_frame = false;
-      m_depth_mutex.unlock();
-      return true;
-    } else {
-      m_depth_mutex.unlock();
+  bool getDepth(std::vector<uint16_t> &buffer) {
+    Mutex::ScopedLock lock(m_depth_mutex);
+    if(!m_new_depth_frame)
       return false;
-    }
+    buffer.swap(m_buffer_depth);
+    m_new_depth_frame = false;
+    return true;
   }
 
   private:
-    std::vector<uint8_t> m_buffer_depth;
-    std::vector<uint8_t> m_buffer_rgb;
+    std::vector<uint16_t> m_buffer_depth;
+    std::vector<uint8_t> m_buffer_video;
     std::vector<uint16_t> m_gamma;
     Mutex m_rgb_mutex;
     Mutex m_depth_mutex;
     bool m_new_rgb_frame;
     bool m_new_depth_frame;
-
-    uint8_t *m_rgb_data;
-    uint16_t *m_depth_data; 
-
-    uint8_t *rgb;
-    uint8_t *depth;
 };
 
 int main(int argc, char** argv){
@@ -163,14 +146,16 @@ int main(int argc, char** argv){
 
   bool die(false);
 
-  uint8_t *rgb = new uint8_t[640*480*3];
-  uint8_t *depth = new uint8_t[640*480*2];
+  std::vector<uint8_t> rgb(640*480*3);
+  std::vector<uint16_t> depth(640*480);
 
   while(!die) {
-    if (device->getVideo(rgb) && device->getDepth(depth)) {
+    if (device->getRGB(rgb) && device->getDepth(depth)) {
+      VLOG(1) << "csio send";
       csio_os.PushSyncMark(2);
-      csio_os.Push(0, static_cast<uint8_t*>(rgb), 640 * 480 * 3);
-      csio_os.Push(1, static_cast<uint8_t*>(depth), 640 * 480 * 2);
+      csio_os.Push(0, &rgb[0] , 640 * 480 * 3);
+      csio_os.Push(1, static_cast<void*>(&depth[0]) , 640 * 480 * 2);
+    } else {
     }
   }
 

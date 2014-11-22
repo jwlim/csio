@@ -151,7 +151,7 @@ class ViewImage : public View {
  public:
   ViewImage(const string& pixel_type, int w, int h, int maxv)
       : View(), pixel_type_(pixel_type), rgb_buf_(w * h * 3, 128),
-        frame_ptr_(NULL), maxv_(maxv), jet_(false) {}
+        frame_ptr_(NULL), maxv_(maxv), jet_(true) {}
   virtual ~ViewImage() {}
 
   virtual void InitializeGL();
