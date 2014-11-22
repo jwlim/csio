@@ -57,7 +57,7 @@ struct ViewerApp {
   void OnResize(int w, int h);
   bool CheckCSIO();
 
-  void Capture(vector<char>* rgb_buf);
+  void Capture(vector<char>* rgb_buf, bool image_only = false);
   void SetDisplayFrameIdx(int frame_idx) {
     if (frame_idx < 0) frame_idx = 0;
     if (frame_idx >= frame_arrays.size()) frame_idx = frame_arrays.size() - 1;
@@ -165,9 +165,13 @@ void ViewerApp::OnResize(int width, int height) {
 }
 
 bool ViewerApp::CheckCSIO() {
-  if (csin_ptr == NULL) return false;
+  if (csin_ptr == NULL) {
+    LOG(ERROR) << "csin_ptr is NULL";
+    return false;
+  }
 
   csio::FrameArray* frame_array_ptr = new csio::FrameArray();
+
   if (csin_ptr->FetchSyncFrames(frame_array_ptr) == false) {
     LOG(ERROR) << "failed to fetch a frame.";
     delete frame_array_ptr;
@@ -197,19 +201,43 @@ bool ViewerApp::CheckCSIO() {
   return true;
 }
 
-void ViewerApp::Capture(vector<char>* rgb_buf) {
-  rgb_buf->resize(w * h * 3);
+void ViewerApp::Capture(vector<char>* rgb_buf, bool image_only) {
+  if (image_only) {
+    rgb_buf->resize(w * (h/2) * 3);
+  } else {
+    rgb_buf->resize(w * h * 3);
+  }
+
   if (w % 4 != 0) glPixelStorei(GL_PACK_ALIGNMENT, w % 2 ? 1 : 2);
-  glReadPixels(0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, rgb_buf->data());
+
+  if (image_only) {
+    glReadPixels(0, h/2, w, h/2, GL_RGB, GL_UNSIGNED_BYTE, rgb_buf->data());
+  } else {
+    glReadPixels(0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, rgb_buf->data());
+  }
+
   char* buf = rgb_buf->data();
-  for (int y = 0; y < h / 2; ++y) {
-    char* p0 = &buf[y * w * 3];
-    char* p1 = &buf[(h - 1 - y) * w * 3];
-    for (int i = 0; i < w * 3; ++i, ++p0, ++p1) {
-      char tmp = *p0;
-      *p0 = *p1;
-      *p1 = tmp;
-    }
+
+  if (image_only) {
+    for (int y = 0; y < h/4; ++y) {
+     char* p0 = &buf[y * w * 3];
+     char* p1 = &buf[(h/2 - 1 - y) * w * 3];
+     for (int i = 0; i < w * 3; ++i, ++p0, ++p1) {
+       char tmp = *p0;
+       *p0 = *p1;
+       *p1 = tmp;
+     }
+    } 
+  } else {
+    for (int y = 0; y < h/2; ++y) {
+     char* p0 = &buf[y * w * 3];
+     char* p1 = &buf[(h - 1 - y) * w * 3];
+     for (int i = 0; i < w * 3; ++i, ++p0, ++p1) {
+       char tmp = *p0;
+       *p0 = *p1;
+       *p1 = tmp;
+     }
+    } 
   }
 }
 
@@ -219,9 +247,15 @@ void ResizeGLWindow(int w, int h) { the_viewer.OnResize(w, h); }
 
 void Redraw() { the_viewer.Redraw(); }
 
-void CheckCSIOForDrawing() { the_viewer.CheckCSIO(); }
+void CheckCSIOForDrawing() { 
+  if(the_viewer.CheckCSIO() == false) {
+    LOG(INFO) << "Terminating csio gl viewer";
+    the_viewer.Cleanup();
+  }
+}
 
 void HandleKeyInput(unsigned char key, int x, int y) {
+  static int count = 0;
   static bool paused = FLAGS_pause;
   switch (key) {
     case 27:  // ESC key.
@@ -236,12 +270,23 @@ void HandleKeyInput(unsigned char key, int x, int y) {
       glutIdleFunc(NULL);
       CheckCSIOForDrawing();
       break;
-    case 'c': {  // Capture the window.
+    case 'C':
+    case 'c': {  // Capture the window
       const int w = the_viewer.w, h = the_viewer.h;
       vector<char> rgb_buf;
       the_viewer.Capture(&rgb_buf);
       csio::WriteRGB8ToPNG(rgb_buf.data(), w, h, w * 3, "capture.png");
     } break;
+    case 'i':
+    case 'I': {
+      // Capture only 2D image
+      const int w = the_viewer.w, h = the_viewer.h;
+      vector<char> rgb_buf;
+      the_viewer.Capture(&rgb_buf, true);
+      char filename[1024];
+      sprintf(filename, "capture_image_%04d.png", count++);
+      csio::WriteRGB8ToPNG(rgb_buf.data(), w, h / 2, w * 3, filename);
+      } break;
     case '[':
       the_viewer.SetDisplayFrameIdx(the_viewer.display_frame_idx + 1);
       the_viewer.Redraw();

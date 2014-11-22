@@ -4,6 +4,7 @@
 //
 
 #include "csio_stream.h"
+#include "csio_frame_parser.h"
 
 #include <fstream>
 #include <iostream>
@@ -143,17 +144,16 @@ int main(int argc, char** argv){
 
   vector<csio::ChannelInfo> channels;
   channels.push_back(csio::ChannelInfo(
-          0, "image/x-csio-raw;pixel=rgb8;width=640;height=480",
-          "Kinect RGB image"));
+          0, csio::MakeImageTypeStr("rgb8", 640, 480), "rgb"));
   channels.push_back(csio::ChannelInfo(
-          1, "image/x-csio-raw;pixel=gray16;size=640x480",
-          "Kinect 16-bit depth image"));
+          1, csio::MakeImageTypeStr("gray16", 640, 480), "depth"));
   map<string, string> config;
-
   LOG(INFO) << "setting up csio::OutputStream (out=" << FLAGS_out << ").";
   csio::OutputStream csio_os;
-  if (csio_os.Setup(channels, config, FLAGS_out) == false) {
-    LOG(ERROR) << "failed to open csio::OutputStream, out=" << FLAGS_out;
+  if (csio_os.Setup(channels, config, FLAGS_out) == true) {
+    LOG(INFO) << "csio::OutputStream opened (out=" << FLAGS_out << "),"
+      << "w:640" << "h:480";
+  } else {
     return -1;
   }
 
