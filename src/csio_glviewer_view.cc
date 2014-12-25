@@ -497,7 +497,7 @@ void View3D::Redraw() {
 
 bool View3D::HandleKey(int key, int special, int x, int y) {
   if (!IsInside(x, y)) return false;
-  const double step_tr = 0.2;
+  static double step_tr = 0.2;
   const double step_rot = M_PI / 36;
   VLOG(1) << "HandleKey: " << key;
   switch (key) {
@@ -515,17 +515,20 @@ bool View3D::HandleKey(int key, int special, int x, int y) {
     case 'Z':  cam_.pose[2] -= step_rot;  break;
     case 'g':  show_grid_ = !show_grid_;  break;
     case 'h':  decoration_ = !decoration_;  break;
-    case 't':  cam_.SetTopView(10.0); break;
-    case 'T':  cam_.SetTopView(50.0); break;
+    case 't':  cam_.SetTopView(cam_.pose[4]); break;
+    case 'T':  cam_.SetTopView(100.0); break;
     case 'f':  cam_.SetFrontView(2.0); break;
     case 'F':  cam_.SetFrontView(3.0); break;
-    case '+':  point_scaler += 0.1; break;
-    case '-':  point_scaler -= 0.1; break;
+//    case '+':  point_scaler += 0.1; break;
+//    case '-':  point_scaler -= 0.1; break;
+    case '+':  step_tr += 1.0; break;
+    case '-':  step_tr -= 1.0; break;
     default:  return false;
   }
   VLOG(1) << setfill(' ') << "Camera: "
       << cam_.pose[3] << "," << cam_.pose[4] << "," << cam_.pose[5] << ","
       << cam_.pose[0] << "," << cam_.pose[1] << "," << cam_.pose[2];
+  LOG(INFO) << "step_tr = " << step_tr;
   cam_.UpdateR();
   Redraw();
   glFlush();
