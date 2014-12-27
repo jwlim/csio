@@ -10,9 +10,9 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}
     "${PROJECT_SOURCE_DIR}/cmake_modules/")
 
 # make release version
-set(CMAKE_BUILD_TYPE RelWithDebInfo)
-#set(CMAKE_BUILD_TYPE release)
-set(CMAKE_VERBOSE_MAKEFILE yes)
+#set(CMAKE_BUILD_TYPE RelWithDebInfo)
+set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_VERBOSE_MAKEFILE no)
 
 enable_testing()
 
@@ -97,6 +97,9 @@ endif (APPLE)
 
 # use sse3 instruction set
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -msse3")  # -DNDEBUG
+SET(CMAKE_CXX_FLAGS_DEBUG "-O0 -g")
+SET(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
+SET(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 add_executable(csio_test src/csio_test.cc)
 target_link_libraries(csio_test ${GOOGLE_LIBRARIES} ${GTEST_LIBS} -lpthread)
