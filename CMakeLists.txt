@@ -24,6 +24,7 @@ LIST(APPEND SEARCH_LIBS /opt/local/lib)
 LIST(APPEND SEARCH_HEADERS /usr/include)
 LIST(APPEND SEARCH_HEADERS /usr/local/include)
 LIST(APPEND SEARCH_HEADERS /usr/local/include/libfreenect)
+LIST(APPEND SEARCH_HEADERS /usr/local/include/dc1394)
 LIST(APPEND SEARCH_HEADERS /opt/local/include)
 
 # Google libraries
@@ -47,6 +48,10 @@ find_package(PNG)
 message("-- Check for libfreenect (optional)")
 find_library(FREENECT_LIB NAMES freenect PATHS ${SEARCH_LIBS})
 find_path(FREENECT_INCLUDE NAMES libfreenect.hpp PATHS ${SEARCH_HEADERS})
+
+message("-- Check for libdc1394 (optional)")
+find_library(DC1394_LIB NAMES dc1394 PATHS ${SEARCH_LIBS})
+find_path(DC1394_INCLUDE NAMES dc1394.h PATHS ${SEARCH_HEADERS})
 
 message("-- Check for GLUT (optional)")
 if (APPLE)
@@ -135,3 +140,15 @@ target_link_libraries(spm2csio ${GOOGLE_LIBRARIES} ${PNG_LIBRARY})
 #else (APPLE)
 #target_link_libraries(simple_ply_viewer ${GOOGLE_LIBRARIES} ${PNG_LIBRARY} ${OPENGL_LIBRARIES} ${GLUT_LIBRARY})
 #endif (APPLE)
+
+if (DC1394_LIB)
+  message(" -- Found dc1394 path ${DC1394_INCLUDE}")
+  message(" -- Found dc1394 libpath ${DC1394_LIB}")
+  add_executable(csiomod_camera1394 src/csiomod_camera1394_main.cc
+    src/csiomod_camera1394.cc)
+  target_link_libraries(csiomod_camera1394 ${DC1394_LIB} ${GOOGLE_LIBRARIES})
+endif (DC1394_LIB)
+
+add_executable(csiomod_imu src/csiomod_imu.cc)
+target_link_libraries(csiomod_imu ${GOOGLE_LIBRARIES})
+

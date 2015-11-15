@@ -46,6 +46,10 @@ inline void ColormapJet(int val, unsigned char* rgb) {  // val: 0 ~ 256*4-1
   else  r = 255 - val, g = 0, b = 0;
 }
 
+inline uint8_t clip(uint32_t t) {
+   return (((t)>255)?255:(((t)<0)?0:(t)));
+}
+
 struct GLGrid {
   int size, step;
   float z;
@@ -221,6 +225,11 @@ View* View::Setup(const csio::ChannelInfo& ch_info, int u, int v) {
     LOG(INFO) << "csio_type '" << type << "' recognized: 3D("
         << w << "x" << h << ").";
     view = new View3D(w, h);
+  } else if (csio::IsIMUType(type, cfg, &pixel_type, &w, &h)) {
+    LOG(INFO) << "csio_type '" << type << "' recognized:"
+        << " (" << w << "x" << h << ").";
+    int maxv = 0;
+    view = new ViewImage(pixel_type, w, h, maxv);
   } else {
     LOG(WARNING) << "unknown csio_type '" << type << "' - skipping.";
     return NULL;
@@ -250,7 +259,7 @@ void ViewImage::UpdateBuffer(const csio::Frame* frame_ptr) {
   CHECK_NOTNULL(frame_ptr);
   if (pixel_type_ == "rgb8") {
     memcpy(rgb_buf_.data(), frame_ptr->buf.data(), frame_ptr->buf.size());
-  } else if (pixel_type_ == "gray8") {
+  } else if (pixel_type_ == "gray8" || pixel_type_ == "mono8") {
     // Do conversion
     const uint8_t* pixel_buf = reinterpret_cast<const
         uint8_t*>(frame_ptr->buf.data());
@@ -274,6 +283,59 @@ void ViewImage::UpdateBuffer(const csio::Frame* frame_ptr) {
         rgb_buf[j] = rgb_buf[j + 1] = rgb_buf[j + 2] = (depth_buf[i] >> shift);
       }
     }
+  } else if (pixel_type_ == "yuv411") {
+    const uint8_t* pixel_buf = reinterpret_cast<const
+      uint8_t*>(frame_ptr->buf.data());
+    uint8_t* rgb_buf = reinterpret_cast<uint8_t*>(rgb_buf_.data());
+    for (int i = 0, j = 0; i < frame_ptr->buf.size(); i += 6) {
+      uint32_t u = pixel_buf[i + 4];
+      uint32_t v = pixel_buf[i + 5];
+      for (int k = i; k < i + 4; k++) {
+        uint32_t y = pixel_buf[k];
+        rgb_buf[j] = clip((76284*(y-16) + 104595*(v-128)) >> 16);
+        rgb_buf[j + 1] = clip((76284*(y-16) - 53281*(v-128) 
+          - 25625*(u-128)) >> 16);
+        rgb_buf[j + 2] = clip((76284*(y-16) + 132252*(u-128)) >> 16);
+        j += 3;
+      }
+    }
+  } else if (pixel_type_ == "yuv422") {
+    const uint8_t* pixel_buf = reinterpret_cast<const
+      uint8_t*>(frame_ptr->buf.data());
+    uint8_t* rgb_buf = reinterpret_cast<uint8_t*>(rgb_buf_.data());
+    for (int i = 0, j = 0; i < frame_ptr->buf.size(); i += 4, j += 3) {
+      uint32_t y = pixel_buf[i];
+      uint32_t u = pixel_buf[i + 1];
+      uint32_t v = pixel_buf[i + 3];
+      rgb_buf[j] = clip((76284*(y-16) + 104595*(v-128)) >> 16);
+      rgb_buf[j + 1] = clip((76284*(y-16) - 53281*(v-128) 
+        - 25625*(u-128)) >> 16);
+      rgb_buf[j + 2] = clip((76284*(y-16) + 132252*(u-128)) >> 16);
+
+      y = pixel_buf[i + 2];
+      j += 3;
+
+      rgb_buf[j] = clip((76284*(y-16) + 104595*(v-128)) >> 16);
+      rgb_buf[j + 1] = clip((76284*(y-16) - 53281*(v-128) 
+        - 25625*(u-128)) >> 16);
+      rgb_buf[j + 2] = clip((76284*(y-16) + 132252*(u-128)) >> 16);
+    }
+  } else if (pixel_type_ == "yuv444") {
+    const uint8_t* pixel_buf = reinterpret_cast<const
+      uint8_t*>(frame_ptr->buf.data());
+    uint8_t* rgb_buf = reinterpret_cast<uint8_t*>(rgb_buf_.data());
+    for (int i = 0, j = 0; i < frame_ptr->buf.size(); i += 3, j += 3) {
+      uint32_t y = (uint32_t)pixel_buf[i];
+      uint32_t u = (uint32_t)pixel_buf[i + 1];
+      uint32_t v = (uint32_t)pixel_buf[i + 2];
+      rgb_buf[j] = clip((76284*(y-16) + 104595*(v-128)) >> 16);
+      rgb_buf[j + 1] = clip((76284*(y-16) - 53281*(v-128) 
+        - 25625*(u-128)) >> 16);
+      rgb_buf[j + 2] = clip((76284*(y-16) + 132252*(u-128)) >> 16);
+    }
+  } else if (pixel_type_ == "imu") {
+    printf("%80s\r", frame_ptr->buf.data());
+    fflush(stdout);    
   } else {
     LOG(INFO) << "unknown pixel_type '" << pixel_type_ << "'";
   }
