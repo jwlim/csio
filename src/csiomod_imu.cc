@@ -74,7 +74,7 @@ int main (int argc, char** argv) {
   map<string, string> cfg;
   vector<csio::ChannelInfo> channels;
   channels.push_back(csio::ChannelInfo(
-          0, csio::MakeIMUTypeStr(300, 200), "imu"));
+          0, csio::MakeIMUTypeStr(), "imu"));
 
   csio::OutputStream csio_os;
   if (csio_os.Setup(channels, cfg, FLAGS_out) == true) {

@@ -151,4 +151,7 @@ endif (DC1394_LIB)
 
 add_executable(csiomod_imu src/csiomod_imu.cc)
 target_link_libraries(csiomod_imu ${GOOGLE_LIBRARIES})
+add_executable(csio_imureader src/csio_imureader.cc)
+target_link_libraries(csio_imureader ${GOOGLE_LIBRARIES})
+
 

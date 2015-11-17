@@ -225,15 +225,11 @@ View* View::Setup(const csio::ChannelInfo& ch_info, int u, int v) {
     LOG(INFO) << "csio_type '" << type << "' recognized: 3D("
         << w << "x" << h << ").";
     view = new View3D(w, h);
-  } else if (csio::IsIMUType(type, cfg, &pixel_type, &w, &h)) {
-    LOG(INFO) << "csio_type '" << type << "' recognized:"
-        << " (" << w << "x" << h << ").";
-    int maxv = 0;
-    view = new ViewImage(pixel_type, w, h, maxv);
   } else {
     LOG(WARNING) << "unknown csio_type '" << type << "' - skipping.";
     return NULL;
   }
+
   view->info = ch_info;
   view->gl.u = u;
   view->gl.v = v;
@@ -333,9 +329,6 @@ void ViewImage::UpdateBuffer(const csio::Frame* frame_ptr) {
         - 25625*(u-128)) >> 16);
       rgb_buf[j + 2] = clip((76284*(y-16) + 132252*(u-128)) >> 16);
     }
-  } else if (pixel_type_ == "imu") {
-    printf("%80s\r", frame_ptr->buf.data());
-    fflush(stdout);    
   } else {
     LOG(INFO) << "unknown pixel_type '" << pixel_type_ << "'";
   }

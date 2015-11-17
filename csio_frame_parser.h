@@ -214,27 +214,14 @@ inline GeometricObject AddGeometricObjectToBuffer(
 //------------------------------------------------------------------------------
 // IMU
 inline bool IsIMUType(const std::string& type,
-                      const std::map<std::string, std::string>& cfg,
-                      std::string* pixel_type = NULL,
-                      int* width = NULL, int* height = NULL) {
+                      const std::map<std::string, std::string>& cfg) {
   if (type != "text/imu_pose") return false;
-  int w = -1, h = -1;
-  if (cfg.count("size") > 0) {
-    sscanf(cfg.find("size")->second.c_str(), "%dx%d", &w, &h);
-  } else {
-    w = atoi(cfg.find("width")->second.c_str());
-    h = atoi(cfg.find("height")->second.c_str());
-  }
-  if (w < 0 || h < 0) return false;
-  if (pixel_type) *pixel_type = cfg.find("pixel")->second;
-  if (width) *width = w;
-  if (height) *height = h;
   return true;
 }
 
-inline std::string MakeIMUTypeStr(int width, int height) {
+inline std::string MakeIMUTypeStr() {
   std::stringstream ss;
-  ss << "image/x-csio-raw;pixel=imu" << ";size=" << width << "x" << height;
+  ss << "text/imu_pose";
   return ss.str();
 }
 
