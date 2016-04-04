@@ -1,6 +1,10 @@
 csio
 ====
 
+Requirements
+------------
+  * Freeglut (sudo apt-get install freeglut3-dev)
+
 Install
 -------
 
