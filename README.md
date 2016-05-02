@@ -1,20 +1,19 @@
-csio
+CSIO : C Standard IO library with GUI
 ====
 
-Requirements
-------------
-  * Freeglut (sudo apt-get install freeglut3-dev)
+## Building ##
 
-Install
--------
+```
+sudo apt-get install freeglut3-dev subversion libpng12-dev libxmu-dev libxi-dev libjpeg-dev
+cd csio
+mkdir build
+cd build
+cmake ..
+make -j
+```
 
-  * $ mkdir build
-  * $ cd build
-  * $ cmake ..
-  * $ make -j8
+## Simple PLY Viewer ##
 
-Simple PLY Viewer
------------------
   * Run the program by passing the ply file as the programs argument eg.
   *
   * ./simple_ply_viewer result.ply
