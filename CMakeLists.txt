@@ -43,19 +43,6 @@ message("-- Check for Google Flags")
 find_library(GFLAGS_LIB NAMES gflags PATHS ${SEARCH_LIBS})
 find_path(GFLAGS_INCLUDE NAMES gflags/gflags.h PATHS ${SEARCH_HEADERS})
 
-option(PACKAGE_TESTS "Build the tests" ON)
-if(PACKAGE_TESTS)
-    enable_testing()
-    # add_subdirectory(tests)
-endif()
-
-add_subdirectory("${PROJECT_SOURCE_DIR}/extern/googletest" "extern/googletest")
-mark_as_advanced(
-    BUILD_GMOCK BUILD_GTEST BUILD_SHARED_LIBS
-    gmock_build_tests gtest_build_samples gtest_build_tests
-    gtest_disable_pthreads gtest_force_shared_crt gtest_hide_internal_symbols
-)
-
 # message("-- Build Google Test")
 # include(ExternalProject)
 # ExternalProject_Add(googletest
@@ -191,14 +178,26 @@ target_link_libraries(csiomod_imu ${GLOG_LIB} ${GFLAGS_LIB})
 add_executable(csio_imureader src/csio_imureader.cc)
 target_link_libraries(csio_imureader ${GLOG_LIB} ${GFLAGS_LIB})
 
-macro(package_add_test TESTNAME)
-    add_executable(${TESTNAME} ${ARGN})
-    target_link_libraries(${TESTNAME} gtest gmock gtest_main ${GLOG_LIB} ${GFLAGS_LIB})
-    add_test(${TESTNAME} ${TESTNAME})
-    set_target_properties(${TESTNAME} PROPERTIES FOLDER tests)
-endmacro()
+option(CSIO_PACKAGE_TESTS "Build the tests" ON)
+if(CSIO_PACKAGE_TESTS)
+    enable_testing()
 
-package_add_test(csio_test tests/csio_test.cc)
+    add_subdirectory("${PROJECT_SOURCE_DIR}/extern/googletest" "extern/googletest")
+    mark_as_advanced(
+        BUILD_GMOCK BUILD_GTEST BUILD_SHARED_LIBS
+        gmock_build_tests gtest_build_samples gtest_build_tests
+        gtest_disable_pthreads gtest_force_shared_crt gtest_hide_internal_symbols
+    )
+
+    macro(package_add_test TESTNAME)
+        add_executable(${TESTNAME} ${ARGN})
+        target_link_libraries(${TESTNAME} gtest gmock gtest_main ${GLOG_LIB} ${GFLAGS_LIB})
+        add_test(${TESTNAME} ${TESTNAME})
+        set_target_properties(${TESTNAME} PROPERTIES FOLDER tests)
+    endmacro()
+
+    package_add_test(csio_test tests/csio_test.cc)
+endif()
 
 # add_executable(csio_test src/csio_test.cc)
 # target_link_libraries(csio_test ${GLOG_LIB} ${GFLAGS_LIB} ${GTEST_LIBS} -lpthread)
