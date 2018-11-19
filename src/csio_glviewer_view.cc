@@ -29,6 +29,10 @@
 #endif
 #include <pthread.h>
 
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"    // warning : 'xx' is deprecated: The POSIX name for this item.. // for strdup used in demo code (so user can copy & paste the code)
+#endif
+
 using namespace std;
 
 DEFINE_double(fov, 90.0, "GL camera field of view");
@@ -46,8 +50,9 @@ inline void ColormapJet(int val, unsigned char* rgb) {  // val: 0 ~ 256*4-1
   else  r = 255 - val, g = 0, b = 0;
 }
 
-inline uint8_t clip(uint32_t t) {
-   return (((t)>255)?255:(((t)<0)?0:(t)));
+template <typename T>
+inline uint8_t Clip(T t) {
+   return static_cast<uint8_t>(((t) > 255) ? 255 : (((t) < 0) ? 0 : (t)));
 }
 
 struct GLGrid {
@@ -154,7 +159,7 @@ namespace csio {
 class ViewImage : public View {
  public:
   ViewImage(const string& pixel_type, int w, int h, int maxv)
-      : View(), pixel_type_(pixel_type), rgb_buf_(w * h * 3, 128),
+      : View(), pixel_type_(pixel_type), rgb_buf_(w * h * 3, char(128)),
         frame_ptr_(NULL), maxv_(maxv), jet_(true) {}
   virtual ~ViewImage() {}
 
@@ -288,10 +293,10 @@ void ViewImage::UpdateBuffer(const csio::Frame* frame_ptr) {
       uint32_t v = pixel_buf[i + 5];
       for (int k = i; k < i + 4; k++) {
         uint32_t y = pixel_buf[k];
-        rgb_buf[j] = clip((76284*(y-16) + 104595*(v-128)) >> 16);
-        rgb_buf[j + 1] = clip((76284*(y-16) - 53281*(v-128) 
+        rgb_buf[j] = Clip((76284*(y-16) + 104595*(v-128)) >> 16);
+        rgb_buf[j + 1] = Clip((76284*(y-16) - 53281*(v-128)
           - 25625*(u-128)) >> 16);
-        rgb_buf[j + 2] = clip((76284*(y-16) + 132252*(u-128)) >> 16);
+        rgb_buf[j + 2] = Clip((76284*(y-16) + 132252*(u-128)) >> 16);
         j += 3;
       }
     }
@@ -303,18 +308,18 @@ void ViewImage::UpdateBuffer(const csio::Frame* frame_ptr) {
       uint32_t y = pixel_buf[i];
       uint32_t u = pixel_buf[i + 1];
       uint32_t v = pixel_buf[i + 3];
-      rgb_buf[j] = clip((76284*(y-16) + 104595*(v-128)) >> 16);
-      rgb_buf[j + 1] = clip((76284*(y-16) - 53281*(v-128) 
+      rgb_buf[j] = Clip((76284*(y-16) + 104595*(v-128)) >> 16);
+      rgb_buf[j + 1] = Clip((76284*(y-16) - 53281*(v-128)
         - 25625*(u-128)) >> 16);
-      rgb_buf[j + 2] = clip((76284*(y-16) + 132252*(u-128)) >> 16);
+      rgb_buf[j + 2] = Clip((76284*(y-16) + 132252*(u-128)) >> 16);
 
       y = pixel_buf[i + 2];
       j += 3;
 
-      rgb_buf[j] = clip((76284*(y-16) + 104595*(v-128)) >> 16);
-      rgb_buf[j + 1] = clip((76284*(y-16) - 53281*(v-128) 
+      rgb_buf[j] = Clip((76284*(y-16) + 104595*(v-128)) >> 16);
+      rgb_buf[j + 1] = Clip((76284*(y-16) - 53281*(v-128)
         - 25625*(u-128)) >> 16);
-      rgb_buf[j + 2] = clip((76284*(y-16) + 132252*(u-128)) >> 16);
+      rgb_buf[j + 2] = Clip((76284*(y-16) + 132252*(u-128)) >> 16);
     }
   } else if (pixel_type_ == "yuv444") {
     const uint8_t* pixel_buf = reinterpret_cast<const
@@ -324,10 +329,10 @@ void ViewImage::UpdateBuffer(const csio::Frame* frame_ptr) {
       uint32_t y = (uint32_t)pixel_buf[i];
       uint32_t u = (uint32_t)pixel_buf[i + 1];
       uint32_t v = (uint32_t)pixel_buf[i + 2];
-      rgb_buf[j] = clip((76284*(y-16) + 104595*(v-128)) >> 16);
-      rgb_buf[j + 1] = clip((76284*(y-16) - 53281*(v-128) 
+      rgb_buf[j] = Clip((76284*(y-16) + 104595*(v-128)) >> 16);
+      rgb_buf[j + 1] = Clip((76284*(y-16) - 53281*(v-128)
         - 25625*(u-128)) >> 16);
-      rgb_buf[j + 2] = clip((76284*(y-16) + 132252*(u-128)) >> 16);
+      rgb_buf[j + 2] = Clip((76284*(y-16) + 132252*(u-128)) >> 16);
     }
   } else {
     LOG(INFO) << "unknown pixel_type '" << pixel_type_ << "'";
@@ -623,7 +628,7 @@ bool View3D::HandleMouse(int button, int state, int x, int y) {
     cam_.UpdateR();
     Redraw();
     glFlush();
- 
+
     return true;
   }
   return false;

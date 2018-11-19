@@ -29,6 +29,10 @@
 #endif
 #include <pthread.h>
 
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"    // warning : 'xx' is deprecated: The POSIX name for this item.. // for strdup used in demo code (so user can copy & paste the code)
+#endif
+
 using namespace std;
 
 DEFINE_string(in, "-", "File path for csio::InputStream (- for stdin).");
@@ -227,7 +231,7 @@ void ViewerApp::Capture(vector<char>* rgb_buf, bool image_only) {
        *p0 = *p1;
        *p1 = tmp;
      }
-    } 
+    }
   } else {
     for (int y = 0; y < h/2; ++y) {
      char* p0 = &buf[y * w * 3];
@@ -237,7 +241,7 @@ void ViewerApp::Capture(vector<char>* rgb_buf, bool image_only) {
        *p0 = *p1;
        *p1 = tmp;
      }
-    } 
+    }
   }
 }
 
@@ -247,7 +251,7 @@ void ResizeGLWindow(int w, int h) { the_viewer.OnResize(w, h); }
 
 void Redraw() { the_viewer.Redraw(); }
 
-void CheckCSIOForDrawing() { 
+void CheckCSIOForDrawing() {
   if(the_viewer.CheckCSIO() == false) {
     LOG(INFO) << "Terminating csio gl viewer";
     the_viewer.Cleanup();
@@ -306,7 +310,7 @@ void HandleKeyInput(unsigned char key, int x, int y) {
             << "(" << key << ")";
       }
     }
-  } 
+  }
 }
 
 void HandleSpecialKeyInput(int special, int x, int y) {

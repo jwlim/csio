@@ -11,7 +11,7 @@
 #include <fcntl.h>      // File control definitions
 #include <errno.h>      // Error number definitions
 #include <termios.h>    // POSIX terminal control definitions
-#include <stropts.h>
+//#include <stropts.h>
 using namespace std;
 
 DEFINE_string(out, "-", "File path for csio::OutputStream (- for stdout).");
